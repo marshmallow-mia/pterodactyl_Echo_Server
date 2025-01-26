@@ -115,5 +115,5 @@ Change the region variable to match your region
 # Open your Pterodactyl dashboard to setup the server
 
 - Go to Nests -> Create New
--- Enter a name
+  - Enter a name
 
