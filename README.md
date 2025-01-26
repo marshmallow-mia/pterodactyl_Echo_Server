@@ -84,6 +84,8 @@ bash getBinaries.sh
 ```
 
 # Configure Echo configs
+
+- config.json:
 ```
 nano /opt/ready-at-dawn-echo-arena/_local/config.json
 ```
@@ -100,3 +102,13 @@ This is an example config.json. If you dont know what to enter here, contact you
     "publisher_lock":  "echovrce"
 }
 ```
+Type CTRL+X, then y, then Enter to save
+
+- start-echo.sh:
+```
+nano ./scripts/start-echo.sh 
+```
+
+Change the region variable to match your region
+
+
