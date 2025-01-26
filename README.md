@@ -3,15 +3,18 @@
 This Guide will help you set up Echo Servers on Linux with Pterodactyl with error handling.
 
 Please use the same paths as I do in this guide. If you dont, stuff might now work as expected.
-You also should have a Domain for the Pterodactyl Dashboard to be able to sue SSL/https.
+
+You also should have a Domain for the Pterodactyl Dashboard to be able to use SSL/https.
 You might be able to do it without, but this Guide will work with a Domain.
 
 
 I use Debian 12 x86. Other systems should work, but in this Guide I will only show how to get it to run on Debian 12.
 
-To install the basic Pterodactyl instance, please follow the official Guide.
-It doesnt make sense for me to just repeat the guide here.
-I will provide some additional imformations for some of the steps, if needed. So check below.
+For some of the steps, you have to follow the official Guide.
+It doesnt make sense for me to just repeat everything here.
+I will provide some additional imformations for some of the steps if needed. So check below for that.
+
+This is the Guide I will work with. Just follow the steps below and I will tell you whenever you have to reference the guide.
 ```
 https://pterodactyl.io/panel/1.0/getting_started.html
 ```
