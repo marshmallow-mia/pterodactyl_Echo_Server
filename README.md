@@ -161,6 +161,14 @@ allowed_mounts:
 - /opt/pterodactyl_Echo_Server/scripts
 ```
 
+- Change Owner of the folders:
+
+```
+chown -R pterodactyl:pterodactyl /opt/pterodactyl_Echo_Server/
+chown -R pterodactyl:pterodactyl /opt/ready-at-dawn-echo-arena/
+
+```
+
 
 # Configure the mounts in your Dashboard
 - Go to Mounts -> Create New
@@ -184,6 +192,7 @@ allowed_mounts:
 - Go to Servers -> Create New
   - Server Name: Enter a Name. (I would include the Port you choose at "Default Allocation" in it. Like Echo_7793)
   - Server Owner: Enter your previously created user
+  - UNCLICK "Start Server when Installed"
   - Node: Choose your Node
   - Default Allocation: Choose a Port
   - Memory/Disk Space: Enter 0 or whatever you want
@@ -191,3 +200,7 @@ allowed_mounts:
   - Nest : Choose your created Nest
   - Egg/Docker Image should be set already
   - Click on Create Server
+  - Wait 5 seconds and click Manage
+  - Click on Mounts
+  - Press the + on both configured Mounts
+# WE ARE PRETTY MUCH DONE!
