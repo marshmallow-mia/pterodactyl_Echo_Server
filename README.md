@@ -161,10 +161,6 @@ allowed_mounts:
 - /opt/pterodactyl_Echo_Server/scripts
 ```
 
-- Restart pteroq
-```
-systemctl restart pteroq.service
-```
 
 # Configure the mounts in your Dashboard
 - Go to Mounts -> Create New
@@ -181,7 +177,7 @@ systemctl restart pteroq.service
   - Source: ``/opt/pterodactyl_Echo_Server/scripts``
   - Target: ``/scripts``
  
-- Its probably the best if you reboot your server now: ``reboot 0``
+- Its probably the best if you reboot your server now (I had problems with the Mounts without rebooting): ``reboot 0``
 
 
 # FINALLY we can create the server instances (Do this for as many servers as you want)
