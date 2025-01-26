@@ -48,8 +48,9 @@ Now continue on the "Download Files" Section of the official Guide and **come ba
 For the Application URL when setting up "php artisan p:environment:setup", you should use a Domain with https. You dont have to, but you really should. If you only have a IP, use http://IP
 
 # Webserver Configuration
-```
+
 If you dont have a Domain, you cant use SSL. So just follow the official Webserver Configuration Section without doing the steps here.
+```
 To Setup your DNS Server and add a subdomain that is pointing to your servers IP.
 As an example: dash.example.com
 apt install -y certbot
