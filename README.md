@@ -3,15 +3,18 @@
 This Guide will help you set up Echo Servers on Linux with Pterodactyl.
 
 Please use the same paths as I do in this guide. If you dont, stuff might now work as expected.
-You also need to have a Domain for this Guide to work.
-You might be able to do it without, but you have to figure out how by yourself.
+You also should have a Domain for the Pterodactyl Dashboard to be able to sue SSL/https.
+You might be able to do it without, but this Guide will work with a Domain.
 
 
 I use Debian 12 x86. Other systems should work, but in this Guide I will only show how to get it to run on Debian 12.
 
 To install the basic Pterodactyl instance, please follow the official Guide.
 It doesnt make sense for me to just repeat the guide here.
-I will provide some additional imformations for some of the steps, if needed.
+I will provide some additional imformations for some of the steps, if needed. So check below.
+```
+https://pterodactyl.io/panel/1.0/getting_started.html
+```
 
 Before you start you should update your system
 ```
@@ -41,8 +44,20 @@ curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/loca
 
 
 ```
-Now continue on the "Download Files" Section of the official Guide and **come back after the Set Permissions
- Section!**
+Now continue on the "Download Files" Section of the official Guide and **come back for the "Webserver Configuration" Section!** 
+For the Application URL when setting up "php artisan p:environment:setup", you should use a Domain with https. You dont have to, but you really should. If you only have a IP, use http://IP
+
+# Webserver Configuration
 ```
-https://pterodactyl.io/panel/1.0/getting_started.html
+If you dont have a Domain, you cant use SSL. So just follow the official Webserver Configuration Section without doing the steps here.
+To Setup your DNS Server and add a subdomain that is pointing to your servers IP.
+As an example: dash.example.com
+apt install -y certbot
+systemctl stop nginx
+certbot --certonly
+Select 1: Spin up a temporary webserver (standalone)
+Enter your details
+systemctl start nginx
+
 ```
+
