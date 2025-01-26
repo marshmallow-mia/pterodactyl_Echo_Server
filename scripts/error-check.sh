@@ -1,6 +1,5 @@
 #!/bin/bash
 #This script checks for errors and restarts the echo server instance
-touch /scripts/test.log
 
 #The script checks the following errors
 errors=( "Unable to find MiniDumpWriteDump" "[NETGAME] Service status request failed: 400 Bad Request" "[NETGAME] Service status request failed: 404 Not Found" "[TCP CLIENT] [R14NETCLIENT] connection to ws:///login" "[TCP CLIENT] [R14NETCLIENT] connection to failed" \
