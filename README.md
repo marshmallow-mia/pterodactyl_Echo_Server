@@ -58,8 +58,8 @@ apt install -y certbot
 systemctl stop nginx
 certbot --certonly
 ```
-Select 1: Spin up a temporary webserver (standalone)
-Enter your details
+- Select 1: Spin up a temporary webserver (standalone)
+- Enter your details
 ```
 systemctl start nginx
 
