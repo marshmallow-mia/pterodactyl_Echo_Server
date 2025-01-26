@@ -230,3 +230,12 @@ You can no close out of the Admin Area (the button top right) and click on one o
 
 - Click start
   - The first start will probably error out. But you dont have to do anything, as my error-check.sh script will automatically restart.
+ 
+# You also should enable the Log Cleanup Script:
+
+Type ``crontab -e``
+Add:
+
+```
+*/5 * * * * /usr/bin/bash /opt/pterodactyl_Echo_Server/scripts/move_logs.sh
+```
