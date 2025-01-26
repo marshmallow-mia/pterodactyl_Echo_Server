@@ -24,13 +24,11 @@ function checkForRunningInstance {
 function checkForError {
     if ! [ -f /ready-at-dawn-echo-arena/logs/$HOSTNAME/*.log ]
     then
-       echo "File not Found"
        return
     fi
     #get the last line of the error file
     lastLine=$(tail -1 /ready-at-dawn-echo-arena/logs/$HOSTNAME/*.log | cut -c 26- | sed -e s/"[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*"//g -e s#"ws://.* "##g -e s#" ws://.*api_key=.*"##g -e s/"\?auth=.*"//g)
     #check the last line for any errors
-    echo $lastLine
     for error in "${errors[@]}"
     do
         #if an error was found
@@ -59,5 +57,4 @@ do
     checkForError
     checkForRunningInstance
     sleep $delayBetweenChecks
-    echo "check start"
 done
