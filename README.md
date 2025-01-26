@@ -28,8 +28,7 @@ apt update
 sudo apt install -y php8.3 php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,fpm,curl,zip} mariadb-server nginx tar unzip git redis-server
 curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
 ```
-
-
-
-
+Now continue in Download Files of the official Guide:
+```
 https://pterodactyl.io/panel/1.0/getting_started.html
+```
