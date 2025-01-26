@@ -204,3 +204,11 @@ chown -R pterodactyl:pterodactyl /opt/ready-at-dawn-echo-arena/
   - Click on Mounts
   - Press the + on both configured Mounts
 # WE ARE PRETTY MUCH DONE!
+
+
+
+If you choosed different ports then the defaults, add the following to /opt/pterodactyl_Echo_Server/files/exclude.list
+
+```
+netconfig*
+```
