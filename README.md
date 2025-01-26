@@ -23,6 +23,8 @@ apt update && apt upgrade -y
 https://docs.docker.com/engine/install/debian/
 ```
 
+# Dependencies Install:
+
 On the Dependency Install, you have to install PHP a different way, as the official Guide uses Ubuntu
 
 I will provide the way I installed the dependencies, but **you have to** check the official Guide for the correct versions. Especially for php
