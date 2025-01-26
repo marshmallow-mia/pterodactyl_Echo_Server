@@ -65,3 +65,10 @@ systemctl start nginx
 
 ```
 
+- Now continue with the Webserver Configuration Section of the official Guide. If you start the "Installing Wings" Section, you dont need to install Docker! We did that already.
+- For Total Memory, Memory Over-Allocation, Total Disk Space, Disk Over-Allocation I entered 8000/100%. But less or more should work fine.
+- For the Allocation, enter your Servers IP-Address and enter Ports: 7793-7803. This will give you 10 possible Server instances.
+
+# Now we are done with the basic Pterodactyl Installation
+
+
