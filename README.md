@@ -1,6 +1,6 @@
 # Echo Server in Pterodactyl
 
-This Guide will help you set up Echo Servers on Linux with Pterodactyl.
+This Guide will help you set up Echo Servers on Linux with Pterodactyl with error handling.
 
 Please use the same paths as I do in this guide. If you dont, stuff might now work as expected.
 You also should have a Domain for the Pterodactyl Dashboard to be able to sue SSL/https.
