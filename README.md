@@ -3,6 +3,8 @@
 This Guide will help you set up Echo Servers on Linux with Pterodactyl.
 
 Please use the same paths as I do in this guide. If you dont, stuff might now work as expected.
+You also need to have a Domain for this Guide to work.
+You might be able to do it without, but you have to figure out how by yourself.
 
 
 I use Debian 12 x86. Other systems should work, but in this Guide I will only show how to get it to run on Debian 12.
