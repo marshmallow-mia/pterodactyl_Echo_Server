@@ -32,7 +32,7 @@ https://docs.docker.com/engine/install/debian/
 # Dependencies Install:
 
 We need to install the dependencies now. The official Guide works with Ubuntu, so I provide you how to set it up on Debian.
-Plese check the php Version on the official Guide! 
+Please check the php Version on the official Guide! 
 
 ```
 apt install -y curl gnupg lsb-release apt-transport-https ca-certificates
@@ -47,8 +47,10 @@ curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/loca
 
 
 ```
-Now continue on the "Download Files" Section of the official Guide and **come back for the "Webserver Configuration" Section!** 
+Please continue on the "Download Files" Section of the official Guide and **come back for the "Webserver Configuration" Section!** 
 For the Application URL when setting up "php artisan p:environment:setup", you should use a Domain with https. You dont have to, but you really should. If you only have a IP, use http://IP
+
+I didnt set up "php artisan p:environment:mail", as I dont need it.
 
 # Webserver Configuration
 
@@ -59,7 +61,7 @@ If you dont have a Domain, you cant use SSL. So just follow the official Webserv
 ```
 apt install -y certbot
 systemctl stop nginx
-certbot --certonly
+certbot certonly
 ```
 - Select 1: Spin up a temporary webserver (standalone)
 - Enter your details
@@ -68,9 +70,14 @@ systemctl start nginx
 
 ```
 
-- Now continue with the Webserver Configuration Section of the official Guide. If you start the "Installing Wings" Section, you dont need to install Docker! We did that already.
+- Now continue with the "Webserver Configuration" Section of the official Guide.
+
+- If you start the "Installing Wings" Section, you dont need to install Docker! We did that already.
+
+Also some Stuff for the "Installing Wings/Configure" Section of the official Guide:
+- It will ask you to create a Location at some point. Do that and click sgain on Nodes -> Create New
 - For Total Memory, Memory Over-Allocation, Total Disk Space, Disk Over-Allocation I entered 8000/100%. But less or more should work fine.
-- For the Allocation, enter your Servers IP-Address and enter Ports: 7793-7803. This will give you 10 possible Server instances.
+- For the Allocation, enter your Servers IP-Address and enter Ports: 6792-6802. This will give you 10 possible Server instances. Dont forget to click Submit!
 
 **Now we are done with the basic Pterodactyl Installation**
 
@@ -82,6 +89,12 @@ cd pterodactyl_Echo_Server
 ```
 
 # Run the getBinaries.sh to get the Echo Binaries
+If you choose different ports then the defaults 6792-6802, add the following to /opt/pterodactyl_Echo_Server/files/exclude.list
+
+```
+netconfig*
+```
+Run
 ```
 bash getBinaries.sh
 ```
@@ -193,7 +206,7 @@ chown -R pterodactyl:pterodactyl /opt/ready-at-dawn-echo-arena/
 
 # FINALLY we can create the server instances (Do this for as many servers as you want)
 - Go to Servers -> Create New
-  - Server Name: Enter a Name. (I would include the Port you choose at "Default Allocation" in it. Like Echo_7793)
+  - Server Name: Enter a Name. (I would include the Port you choose at "Default Allocation" in it. Like Echo_6792)
   - Server Owner: Enter your previously created user
   - UNCLICK "Start Server when Installed"
   - Node: Choose your Node
@@ -203,20 +216,16 @@ chown -R pterodactyl:pterodactyl /opt/ready-at-dawn-echo-arena/
   - Nest : Choose your created Nest
   - Egg/Docker Image should be set already
   - Click on Create Server
-  - Wait 5 seconds and click Manage
+  - It will take a minute for the server to be installed. Just wait a minute and reload the page until you have the Mounts Tab
   - Click on Mounts
   - Press the + on both configured Mounts
  
-If you choosed different ports then the defaults, add the following to /opt/pterodactyl_Echo_Server/files/exclude.list
 
-```
-netconfig*
-```
 
 # WE ARE PRETTY MUCH DONE!
 
 
-You can no close out of the Admin Area and click on one of your created servers
+You can no close out of the Admin Area (the button top right) and click on one of your created servers
 
 - Click start
   - The first start will probably error out. But you dont have to do anything, as my error-check.sh script will automatically restart.
