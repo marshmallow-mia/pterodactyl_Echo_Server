@@ -40,7 +40,6 @@ sudo apt install -y php8.3 php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,fpm,c
 curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
 
 
-
 ```
 Now continue on the "Download Files" Section of the official Guide:
 ```
