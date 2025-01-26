@@ -36,6 +36,7 @@ function checkForError {
         #if an error was found
         if [[ "$error" =~ "$lastLine" ]]
         then
+            echo "Error found: $lastLine" 
             #wait for the configured time before recheck
             sleep $timeToWaitBeforeRestart
             #get the last line again
@@ -43,6 +44,7 @@ function checkForError {
             #compare error line and current line
             if [[ "$lastLine" =~ "$lastLineNew" ]]
             then
+                echo "Killing Process due to error: $lastLine"
                 #kill the process and log the reason
                 pkill -f "echovr"
                 echo $(date)": Process killed. Reason: "$lastLine >> /ready-at-dawn-echo-arena/logs/$HOSTNAME/errorlog
