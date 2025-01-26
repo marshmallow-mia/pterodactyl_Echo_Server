@@ -41,7 +41,8 @@ curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/loca
 
 
 ```
-Now continue on the "Download Files" Section of the official Guide:
+Now continue on the "Download Files" Section of the official Guide and **come back after the Set Permissions
+ Section!**
 ```
 https://pterodactyl.io/panel/1.0/getting_started.html
 ```
