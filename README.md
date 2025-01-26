@@ -182,4 +182,16 @@ systemctl restart pteroq.service
   - Target: ``/scripts``
  
 - Its probably the best if you reboot your server now: ``reboot 0``
-  
+
+
+# FINALLY we can create the server instances (Do this for as many servers as you want)
+- Go to Servers -> Create New
+  - Server Name: Enter a Name. (I would include the Port you choose at "Default Allocation" in it. Like Echo_7793)
+  - Server Owner: Enter your previously created user
+  - Node: Choose your Node
+  - Default Allocation: Choose a Port
+  - Memory/Disk Space: Enter 0 or whatever you want
+  - CPU Limit/CPU Pinning is a really nice Setting, but you dont really need to set it
+  - Nest : Choose your created Nest
+  - Egg/Docker Image should be set already
+  - Click on Create Server
