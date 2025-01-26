@@ -10,6 +10,7 @@ I use Debian 12 x86. Other systems should work, but in this Guide I will only sh
 To install the basic Pterodactyl instance, please follow the official Guide.
 It doesnt make sense for me to just repeat the guide here.
 I will provide some additional imformations for some of the steps, if needed.
+
 Before you start you should update your system
 ```
 apt update && apt upgrade -y
