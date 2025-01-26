@@ -39,7 +39,7 @@ apt update
 curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash
 apt update
 #Check for the right php version on the official Guide!
-sudo apt install -y php8.3 php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,fpm,curl,zip} mariadb-server nginx tar unzip git redis-server
+sudo apt install -y php8.3 php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,fpm,curl,zip} mariadb-server nginx tar unzip git redis-server bc
 curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
 
 
@@ -69,6 +69,17 @@ systemctl start nginx
 - For Total Memory, Memory Over-Allocation, Total Disk Space, Disk Over-Allocation I entered 8000/100%. But less or more should work fine.
 - For the Allocation, enter your Servers IP-Address and enter Ports: 7793-7803. This will give you 10 possible Server instances.
 
-# Now we are done with the basic Pterodactyl Installation
+**Now we are done with the basic Pterodactyl Installation**
 
+# Clone this Repo:
+```
+cd /opt
+git clone https://github.com/BL00DY-C0D3/pterodactyl_Echo_Server.git
+cd pterodactyl_Echo_Server
+```
+
+#Run the getBinaries.sh to get the Echo Binaries
+```
+bash getBinaries.sh
+```
 
