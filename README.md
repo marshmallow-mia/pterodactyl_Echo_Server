@@ -31,9 +31,9 @@ https://docs.docker.com/engine/install/debian/
 
 # Dependencies Install:
 
-On the Dependency Install, you have to install PHP a different way, as the official Guide uses Ubuntu
+We need to install the dependencies now. The official Guide works with Ubuntu, so I provide you how to set it up on Debian.
+Plese check the php Version on the official Guide! 
 
-I will provide the way I installed the dependencies, but **you have to** check the official Guide for the correct versions. Especially for php
 ```
 apt install -y curl gnupg lsb-release apt-transport-https ca-certificates
 wget -qO - https://packages.sury.org/php/apt.gpg | sudo gpg --dearmor -o /usr/share/keyrings/sury-php.gpg
