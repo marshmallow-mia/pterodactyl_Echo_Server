@@ -146,4 +146,40 @@ Change the region variable to match your region
   - Log Configuration: ``{}``
 - Save
 
+# Prepare mounts
 
+- Go back into your Terminal
+
+```
+nano /etc/pterodactyl/config.yml
+```
+- On the allowed_mounts section enter the path like this:
+
+```
+allowed_mounts:
+- /opt/ready-at-dawn-echo-arena
+- /opt/pterodactyl_Echo_Server/scripts
+```
+
+- Restart pteroq
+```
+systemctl restart pteroq.service
+```
+
+# Configure the mounts in your Dashboard
+- Go to Mounts -> Create New
+  - Name: ``ready-at-dawn-echo-arena``
+  - Source: ``/opt/ready-at-dawn-echo-arena``
+  - Target: ``/ready-at-dawn-echo-arena``
+  - Click Create
+  - Eggs: Choose your created Egg (Probably at the bottom of the list)
+  - Nodes: Choose your Node
+  - Click on Save
+
+- Do the same again with different Name, Source, Target
+  - Name: ``scripts``
+  - Source: ``/opt/pterodactyl_Echo_Server/scripts``
+  - Target: ``/scripts``
+ 
+- Its probably the best if you reboot your server now: ``reboot 0``
+  
