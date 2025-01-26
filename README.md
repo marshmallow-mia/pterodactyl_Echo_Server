@@ -120,8 +120,7 @@ Change the region variable to match your region
   - Associated Nest = the Nest you just created
   - Name = Enter a name
   - Docker Images:
-  ``miarshmallow/echovr
-  `` (You can build and upload your own Dockerimage with the provided Dockerfile)
+  ``miarshmallow/echovr``(You can build and upload your own Dockerimage with the provided Dockerfile)
   - 
 
 
