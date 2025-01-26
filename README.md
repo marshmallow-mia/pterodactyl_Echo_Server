@@ -120,7 +120,22 @@ Change the region variable to match your region
   - Associated Nest = the Nest you just created
   - Name = Enter a name
   - Docker Images:
-  ``miarshmallow/echovr``(You can build and upload your own Dockerimage with the provided Dockerfile)
-  - 
+  ``miarshmallow/echovr`` (You can build and upload (dockerhub) your own Dockerimage with the provided Dockerfile if you want to.)
+  - Startup Command: ``${MODIFIED_STARTUP}``
+  - Stop Command: ``^C``
+  - Configuration Files:
+```
+{
+    "server.properties": {
+        "parser": "properties",
+        "find": {
+            "server-ip": "0.0.0.0",
+            "enable-query": "true",
+            "server-port": "{{server.build.default.port}}",
+            "query.port": "{{server.build.default.port}}"
+        }
+    }
+}
+```
 
 
