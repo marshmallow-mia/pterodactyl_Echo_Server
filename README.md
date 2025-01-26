@@ -116,26 +116,34 @@ Change the region variable to match your region
 
 - Go to Nests -> Create New
   - Enter a name
-- Click on New Egg
-  - Associated Nest = the Nest you just created
-  - Name = Enter a name
+  - Click on New Egg
+  - Associated Nest: The Nest you just created
+  - Name: Enter a name
   - Docker Images:
   ``miarshmallow/echovr`` (You can build and upload (dockerhub) your own Dockerimage with the provided Dockerfile if you want to.)
   - Startup Command: ``${MODIFIED_STARTUP}``
   - Stop Command: ``^C``
   - Configuration Files:
-```
-{
-    "server.properties": {
-        "parser": "properties",
-        "find": {
-            "server-ip": "0.0.0.0",
-            "enable-query": "true",
-            "server-port": "{{server.build.default.port}}",
-            "query.port": "{{server.build.default.port}}"
+    ```
+    {
+        "server.properties": {
+            "parser": "properties",
+            "find": {
+                "server-ip": "0.0.0.0",
+                "enable-query": "true",
+                "server-port": "{{server.build.default.port}}",
+                "query.port": "{{server.build.default.port}}"
+            }
         }
     }
-}
-```
+    ```
+  - Start Configuration:
+      ```
+      {
+          "done": ")! For help, type "
+      }
+      ```
+  - Log Configuration: ``{}``
+- Save
 
 
