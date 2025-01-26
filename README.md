@@ -50,14 +50,17 @@ For the Application URL when setting up "php artisan p:environment:setup", you s
 # Webserver Configuration
 
 If you dont have a Domain, you cant use SSL. So just follow the official Webserver Configuration Section without doing the steps here.
+
+- Setup your DNS Server and add a subdomain that is pointing to your servers IP.
+  As an example: dash.example.com
 ```
-To Setup your DNS Server and add a subdomain that is pointing to your servers IP.
-As an example: dash.example.com
 apt install -y certbot
 systemctl stop nginx
 certbot --certonly
+```
 Select 1: Spin up a temporary webserver (standalone)
 Enter your details
+```
 systemctl start nginx
 
 ```
