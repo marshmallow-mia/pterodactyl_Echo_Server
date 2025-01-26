@@ -78,8 +78,25 @@ git clone https://github.com/BL00DY-C0D3/pterodactyl_Echo_Server.git
 cd pterodactyl_Echo_Server
 ```
 
-#Run the getBinaries.sh to get the Echo Binaries
+# Run the getBinaries.sh to get the Echo Binaries
 ```
 bash getBinaries.sh
 ```
 
+# Configure Echo configs
+```
+nano /opt/ready-at-dawn-echo-arena/_local/config.json
+```
+
+This is an example config.json. If you dont know what to enter here, contact your Matchmaking Admin!
+```
+{
+    "apiservice_host":  "http://g.example.com:80/api",
+    "configservice_host":  "ws://g.example.com:80/config",
+    "loginservice_host":  "ws://g.example.com:80/login?discordid=<YOUR DISCORD ID>&password=<YOUR PASSWORD>",
+    "matchingservice_host":  "ws://g.example.com:80/matching",
+    "serverdb_host":  "ws://g.example.com:80/serverdb?discordid=<YOUR DISCORD ID>&password=<YOUR PASSWORD>&regions=default,<YOUR REGION CODE>",
+    "transactionservice_host":  "ws://g.example.com:80/transaction",
+    "publisher_lock":  "echovrce"
+}
+```
