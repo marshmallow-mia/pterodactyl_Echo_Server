@@ -213,5 +213,7 @@ netconfig*
 # WE ARE PRETTY MUCH DONE!
 
 
+You can no close out of the Admin Area and click on one of your created servers
 
-
+- Click start
+  - The first start will probably error out. But you dont have to do anything, as my error-check.sh script will automatically restart.
