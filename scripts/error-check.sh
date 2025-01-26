@@ -59,4 +59,5 @@ do
     checkForError
     checkForRunningInstance
     sleep $delayBetweenChecks
+    echo "check start"
 done
