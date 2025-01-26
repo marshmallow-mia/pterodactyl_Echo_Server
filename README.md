@@ -15,6 +15,7 @@ Before you start you should update your system
 apt update && apt upgrade -y
 ```
 On the Dependency Install, you have to install PHP a different way, as the official Guide uses Ubuntu
+
 I will provide the way I installed the dependencies, but **you have to** check the official Guide for the correct versions. Especially for php
 ```
 apt install -y curl gnupg lsb-release apt-transport-https ca-certificates
