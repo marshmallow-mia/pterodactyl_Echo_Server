@@ -1,6 +1,7 @@
 # Echo Server in Pterodactyl
 
 This Guide will help you set up Echo Servers on Linux with Pterodactyl with error handling.
+![image](https://github.com/user-attachments/assets/983bed6e-7714-44a2-96be-1517073eeabe)
 
 Please use the same paths as I do in this guide. If you dont, stuff might now work as expected.
 
