@@ -12,13 +12,13 @@ function checkForStuckServer {
     do
         if ! [ -f $logPath ]
         then
-            echo "no file"
+            #echo "no file"
             waitingForChange=0
             return
         fi
         if ! [[ "$(tail -1 $logPath)" == "$lastLine" ]]
         then
-            echo "different"
+            #echo "different"
             waitingForChange=0
             return
         else
@@ -45,7 +45,7 @@ function checkForStuckServer {
 
 while :
 do
-    echo $waitingForChange
+    #echo $waitingForChange
     if [[ $waitingForChange -eq 0 ]]
     then
         checkForStuckServer
