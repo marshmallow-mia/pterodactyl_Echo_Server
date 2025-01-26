@@ -116,4 +116,11 @@ Change the region variable to match your region
 
 - Go to Nests -> Create New
   - Enter a name
+- Click on New Egg
+  - Associated Nest = the Nest you just created
+  - Name = Enter a name
+  - Docker Images = miarshmallow/echovr
+  (You can build and upload your own Dockerimage with the provided Dockerfile)
+  - 
+
 
