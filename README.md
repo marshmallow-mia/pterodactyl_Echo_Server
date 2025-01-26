@@ -17,6 +17,12 @@ Before you start you should update your system
 ```
 apt update && apt upgrade -y
 ```
+
+# Install Docker:
+```
+https://docs.docker.com/engine/install/debian/
+```
+
 On the Dependency Install, you have to install PHP a different way, as the official Guide uses Ubuntu
 
 I will provide the way I installed the dependencies, but **you have to** check the official Guide for the correct versions. Especially for php
@@ -31,10 +37,7 @@ apt update
 sudo apt install -y php8.3 php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,fpm,curl,zip} mariadb-server nginx tar unzip git redis-server
 curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
 
-# Install Docker:
-```
-https://docs.docker.com/engine/install/debian/
-```
+
 
 ```
 Now continue on the "Download Files" Section of the official Guide:
