@@ -30,6 +30,12 @@ apt update
 #Check for the right php version on the official Guide!
 sudo apt install -y php8.3 php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,fpm,curl,zip} mariadb-server nginx tar unzip git redis-server
 curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
+
+# Install Docker:
+```
+https://docs.docker.com/engine/install/debian/
+```
+
 ```
 Now continue on the "Download Files" Section of the official Guide:
 ```
