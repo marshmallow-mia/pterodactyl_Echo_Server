@@ -90,7 +90,7 @@ cd pterodactyl_Echo_Server
 ```
 
 # Run the getBinaries.sh to get the Echo Binaries
-If you choose different ports then the defaults 6792-6802, add the following to /opt/pterodactyl_Echo_Server/files/exclude.list
+If you choose different ports then the defaults 6792-6802, add the following to /opt/pterodactyl_Echo_Server/files/exclude.list **AFTER YOU STARTED THE SCRIPT BELOW ONCE**
 
 ```
 netconfig*
