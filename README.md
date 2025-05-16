@@ -133,35 +133,43 @@ Change the region variable to match your region
 
 - Go to Nests -> Create New
   - Enter a name
-  - Click on New Egg
-  - Associated Nest: The Nest you just created
-  - Name: Enter a name
-  - Docker Images:
-  ``miarshmallow/echovr`` (You can build and upload (dockerhub) your own Dockerimage with the provided Dockerfile if you want to.)
-  - Startup Command: ``${MODIFIED_STARTUP}``
-  - Stop Command: ``^C``
-  - Configuration Files:
-    ```
-    {
-        "server.properties": {
-            "parser": "properties",
-            "find": {
-                "server-ip": "0.0.0.0",
-                "enable-query": "true",
-                "server-port": "{{server.build.default.port}}",
-                "query.port": "{{server.build.default.port}}"
-            }
+  ## Option 1: Import premade egg
+    1. Download https://github.com/BL00DY-C0D3/pterodactyl_Echo_Server/blob/main/echovr-egg.json
+    2. Click "Import Egg"
+      - Egg file: The downloaded JSON file
+      - Associated Nest: The nest you just created
+    3. Save
+   
+  ## Option 2: Manually create egg
+    1. Click on New Egg
+    2. Associated Nest: The Nest you just created
+    3. Name: Enter a name
+    4. Docker Images:
+    ``miarshmallow/echovr`` (You can build and upload (dockerhub) your own Dockerimage with the provided Dockerfile if you want to.)
+    5. Startup Command: ``${MODIFIED_STARTUP}``
+    6. Stop Command: ``^C ^C``
+    7. Configuration Files:
+       ```
+       {
+           "server.properties": {
+               "parser": "properties",
+               "find": {
+                   "server-ip": "0.0.0.0",
+                   "enable-query": "true",
+                   "server-port": "{{server.build.default.port}}",
+                   "query.port": "{{server.build.default.port}}"
+               }
+           }
+       }
+       ```
+    8. Start Configuration:
+        ```
+        {
+          "done": "[NSLOBBY] registration successful"
         }
-    }
-    ```
-  - Start Configuration:
-      ```
-      {
-          "done": ")! For help, type "
-      }
-      ```
-  - Log Configuration: ``{}``
-- Save
+        ```
+    9. Log Configuration: ``{}``
+    10. Save
 
 # Prepare mounts
 
