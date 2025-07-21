@@ -80,6 +80,7 @@ Also some Stuff for the "Installing Wings/Configure" Section of the official Gui
 - For Total Memory, Memory Over-Allocation, Total Disk Space, Disk Over-Allocation I entered 8000/100%. But less or more should work fine.
 - For the Allocation, enter your Servers IP-Address and enter Ports: 6792-6802. This will give you 10 possible Server instances. Dont forget to click Submit!
 - Dont forget the Auto-Deploy!!!
+  
   <img width="564" height="302" alt="image" src="https://github.com/user-attachments/assets/e4ece97a-9cab-47b1-b519-f45d36eb3379" />
 
 
