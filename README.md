@@ -192,13 +192,7 @@ allowed_mounts:
 - /opt/pterodactyl_Echo_Server/scripts
 ```
 
-- Change Owner of the folders:
 
-```
-chown -R pterodactyl:pterodactyl /opt/pterodactyl_Echo_Server/
-chown -R pterodactyl:pterodactyl /opt/ready-at-dawn-echo-arena/
-
-```
 
 
 # Configure the mounts in your Dashboard
