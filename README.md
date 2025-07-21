@@ -172,22 +172,6 @@ Change the region variable to match your region
     10. Save
 
 
-# Now we can create the server instances (Do this for as many servers as you want)
-- Go to Servers -> Create New
-  - Server Name: Enter a Name. (I would include the Port you choose at "Default Allocation" in it. Like Echo_6792)
-  - Server Owner: Enter your previously created user
-  - UNCLICK "Start Server when Installed"
-  - Node: Choose your Node
-  - Default Allocation: Choose a Port
-  - Memory/Disk Space: Enter 0 or whatever you want
-  - CPU Limit/CPU Pinning is a really nice Setting, but you dont really need to set it
-  - Nest : Choose your created Nest
-  - Egg/Docker Image should be set already
-  - Click on Create Server
-  - It will take a minute for the server to be installed. Just wait a minute and reload the page until you have the Mounts Tab
-  - Click on Mounts
-  - Press the + on both configured Mounts
-
 
 # Prepare mounts
 
@@ -229,6 +213,26 @@ chown -R pterodactyl:pterodactyl /opt/ready-at-dawn-echo-arena/
   - Target: ``/scripts``
  
 - Its probably the best if you reboot your server now (I had problems with the Mounts without rebooting): ``reboot 0``
+
+
+
+# Finally we can create the server instances (Do this for as many servers as you want)
+- Go to Servers -> Create New
+  - Server Name: Enter a Name. (I would include the Port you choose at "Default Allocation" in it. Like Echo_6792)
+  - Server Owner: Enter your previously created user
+  - UNCLICK "Start Server when Installed"
+  - Node: Choose your Node
+  - Default Allocation: Choose a Port
+  - Memory/Disk Space: Enter 0 or whatever you want
+  - CPU Limit/CPU Pinning is a really nice Setting, but you dont really need to set it
+  - Nest : Choose your created Nest
+  - Egg/Docker Image should be set already
+  - Click on Create Server
+  - It will take a minute for the server to be installed. Just wait a minute and reload the page until you have the Mounts Tab
+  - Click on Mounts
+  - Press the + on both configured Mounts
+
+
 
 
 # WE ARE PRETTY MUCH DONE!
