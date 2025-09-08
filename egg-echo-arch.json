@@ -1,0 +1,50 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2025-05-16T02:53:40+00:00",
+    "name": "Echo VR - Arch Linux",
+    "author": "pterodactyl@pclip.dev",
+    "description": "Echo VR Server for Arch Linux with MATE Desktop Environment support",
+    "features": null,
+    "docker_images": {
+        "echovr-arch": "echovr-arch"
+    },
+    "file_denylist": [],
+    "startup": "${MODIFIED_STARTUP}",
+    "config": {
+        "files": "{\r\n    \"server.properties\": {\r\n        \"parser\": \"properties\",\r\n        \"find\": {\r\n            \"server-ip\": \"0.0.0.0\",\r\n            \"enable-query\": \"true\",\r\n            \"server-port\": \"{{server.build.default.port}}\",\r\n            \"query.port\": \"{{server.build.default.port}}\"\r\n        }\r\n    }\r\n}",
+        "startup": "{\r\n    \"done\": \"[NSLOBBY] registration successful\"\r\n}",
+        "logs": "{}",
+        "stop": "^C ^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Arch Linux Echo VR Installation Script\necho \"Starting Echo VR installation for Arch Linux...\"\n\n# Create necessary directories\nmkdir -p /ready-at-dawn-echo-arena\nmkdir -p /scripts\n\n# Set permissions\nchown -R container:container /ready-at-dawn-echo-arena\nchown -R container:container /scripts\n\necho \"Installation completed\"",
+            "container": "archlinux:latest",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "DISPLAY",
+            "description": "X11 Display for GUI applications",
+            "env_variable": "DISPLAY",
+            "default_value": ":0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
+            "name": "VNC_ENABLED",
+            "description": "Enable VNC server for remote desktop",
+            "env_variable": "VNC_ENABLED",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:true,false"
+        }
+    ]
+}
