@@ -249,3 +249,12 @@ Add:
 ```
 */5 * * * * /usr/bin/bash /opt/pterodactyl_Echo_Server/scripts/move_logs.sh
 ```
+
+# Optionally, delete old log files.  In the crontab entry below, replace 30 with the number of days you want to keep older logs:
+
+Type ``crontab -e``
+Add:
+
+```
+5 11 * * * find /opt/ready-at-dawn-echo-arena/logs/archive -type f -mtime +30 -delete
+```
