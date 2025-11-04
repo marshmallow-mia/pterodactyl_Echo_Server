@@ -65,5 +65,6 @@ do
         #echo ""
         mkdir -p "${new_dir}"
         mv -n "${old_path}" "${new_path}"
+        gzip "${new_path}"
     done
 done
