@@ -1,0 +1,64 @@
+FROM archlinux/archlinux:latest
+
+# Alternative Dockerfile using official archlinux image with regular package manager access
+
+# Create container user and group
+RUN pacman -Syu --noconfirm && \
+    groupadd --gid 995 container && \
+    useradd --uid 999 --gid 995 --home-dir /home/container --create-home --shell /bin/bash container
+
+# Install base packages
+RUN pacman -S --noconfirm wget gnupg curl procps-ng bc htop nano which base-devel
+
+# Install MATE Desktop Environment
+RUN pacman -S --noconfirm mate mate-extra lightdm lightdm-gtk-greeter xorg-server xorg-xinit
+
+# Install additional packages needed for Echo VR server
+RUN pacman -S --noconfirm cabextract unzip
+
+# Enable multilib repository and install wine
+RUN echo "[multilib]" >> /etc/pacman.conf && \
+    echo "Include = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf && \
+    pacman -Syu --noconfirm && \
+    pacman -S --noconfirm wine wine-gecko wine-mono winetricks
+
+# Install VNC server for remote desktop capability
+RUN pacman -S --noconfirm tigervnc
+
+# Clean up package cache
+RUN pacman -Scc --noconfirm
+
+# Switch to root for setup
+USER root
+WORKDIR /home/container
+
+# Copy and run wine setup script
+COPY ./files/install-wine-arch.sh /tmp/
+RUN chmod +x /tmp/install-wine-arch.sh && \
+    /tmp/install-wine-arch.sh && \
+    rm /tmp/install-wine-arch.sh
+
+# Create wine directories and setup
+USER container
+RUN wine wineboot --init
+
+# Copy demo profile
+ARG src="./files/demoprofile.json"
+ARG target="/home/container/.wine/drive_c/users/container/Local Settings/Application Data/rad/echovr/users/dmo/demoprofile.json"
+COPY ${src} ${target}
+
+# Fix permissions
+USER root
+RUN chown -R container:container /home/container
+
+# Set environment variables
+ENV WINEDEBUG=-all
+ENV TERM=xterm
+ENV DISPLAY=:0
+ENV WINEPREFIX=/home/container/.wine
+
+# Switch back to container user
+USER container
+ENV USER=container HOME=/home/container
+
+ENTRYPOINT ["bash", "/scripts/entrypoint-arch.sh"]

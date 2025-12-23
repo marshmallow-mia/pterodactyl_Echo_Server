@@ -8,8 +8,12 @@ Please use the same paths as I do in this guide. If you dont, stuff might now wo
 You also should have a Domain for the Pterodactyl Dashboard to be able to use SSL/https.
 You might be able to do it without, but this Guide will work with a Domain.
 
+## Supported Systems
 
-I use Debian 12 x86. Other systems should work, but in this Guide I will only show how to get it to run on Debian 12.
+- **Debian 12 x86** (Primary guide below)
+- **Arch Linux with MATE Desktop Environment** - See [README-ARCH.md](README-ARCH.md) for Arch Linux specific instructions
+
+I use Debian 12 x86. Other systems should work, but in this Guide I will only show how to get it to run on Debian 12. For Arch Linux setup with MATE Desktop Environment, please refer to the separate Arch Linux guide.
 
 For some of the steps, you have to follow the official Guide.
 It doesnt make sense for me to just repeat everything here.

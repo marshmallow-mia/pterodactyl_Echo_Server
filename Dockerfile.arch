@@ -1,0 +1,56 @@
+FROM archlinux:latest
+
+# Create container user and group first (use different IDs to avoid conflicts)
+RUN groupadd --gid 995 container || groupadd container && \
+    useradd --uid 999 --gid container --home-dir /home/container --create-home --shell /bin/bash container || \
+    useradd --home-dir /home/container --create-home --shell /bin/bash container
+
+# Update system and install base packages
+RUN pacman-key --init && \
+    pacman-key --populate archlinux && \
+    pacman -Syu --noconfirm && \
+    pacman -S --noconfirm wget gnupg curl procps-ng bc htop nano which base-devel
+
+# Install MATE Desktop Environment and required packages
+RUN pacman -S --noconfirm mate mate-extra lightdm lightdm-gtk-greeter xorg-server
+
+# Install additional packages needed for Echo VR server
+RUN pacman -S --noconfirm cabextract unzip
+
+# Install wine from multilib
+RUN echo "[multilib]" >> /etc/pacman.conf && \
+    echo "Include = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf && \
+    pacman -Syu --noconfirm && \
+    pacman -S --noconfirm wine wine-gecko wine-mono winetricks
+
+# Clean up package cache
+RUN pacman -Scc --noconfirm
+
+USER root
+
+WORKDIR /home/container
+
+# Install wine and winetricks configuration
+COPY ./files/install-wine-arch.sh /
+RUN bash /install-wine-arch.sh && \
+    rm /install-wine-arch.sh
+
+# SET the Echo Folder
+RUN wine wineboot
+
+ARG src="./files/demoprofile.json"
+ARG target="/root/.wine/drive_c/users/root/Local Settings/Application Data/rad/echovr/users/dmo/demoprofile.json"
+ARG target2="/home/container/.wine/drive_c/users/container/Local Settings/Application Data/rad/echovr/users/dmo/demoprofile.json"
+COPY ${src} ${target}
+COPY ${src} ${target2}
+
+RUN chown -R container:container /home/container
+
+ENV WINEDEBUG=-all
+ENV TERM=xterm
+ENV DISPLAY=:0
+
+USER container
+ENV USER=container HOME=/home/container
+
+ENTRYPOINT ["bash", "/scripts/entrypoint-arch.sh"]
