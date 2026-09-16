@@ -138,7 +138,7 @@ Change the region variable to match your region
 - Go to Nests -> Create New
   - Enter a name
   ## Option 1: Import premade egg
-    1. Download https://github.com/BL00DY-C0D3/pterodactyl_Echo_Server/blob/main/echovr-egg.json
+    1. Download [https://github.com/BL00DY-C0D3/pterodactyl_Echo_Server/blob/](https://github.com/marshmallow-mia/pterodactyl_Echo_Server/blob/main/egg-echo.json)
     2. Click "Import Egg"
       - Egg file: The downloaded JSON file
       - Associated Nest: The nest you just created
