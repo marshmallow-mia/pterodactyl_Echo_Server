@@ -1,10 +1,10 @@
-FROM debian:bullseye-slim as build
+FROM debian:trixie-slim AS build
 
 ENV DEBIAN_FRONTEND="noninteractive"
 
 #Install some needed packages
 RUN apt-get update \
- && apt-get install -y wget software-properties-common gnupg2 cabextract procps bc htop nano curl adduser
+ && apt-get install -y wget ca-certificates gnupg cabextract procps bc htop nano curl adduser
 
 RUN apt purge -y sudo
 
@@ -40,7 +40,7 @@ RUN bash /install-wine.sh \
 
 
 # SET the Echo Folder
-RUN wine wineboot
+RUN wine wineboot && wineserver -w
 
 ARG src="./files/demoprofile.json"
 ARG target="/root/.wine/drive_c/users/root/Local Settings/Application Data/rad/echovr/users/dmo/demoprofile.json"
