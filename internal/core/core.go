@@ -95,6 +95,9 @@ func (a *App) Login(ctx context.Context) (auth.Session, error) {
 
 func (a *App) devicePath() string { return filepath.Join(a.Dir, pcfg.DeviceFile) }
 
+// ResetPasswordNote is shown before a device link starts.
+const ResetPasswordNote = "Device sign-in needs an EchoVRCE account without a password. If you ever set one for hosting, run /reset-password in the Echo VR Lounge Discord first."
+
 // DeviceLinked reports whether `account link` stored a device link.
 func (a *App) DeviceLinked() bool {
 	_, err := os.Stat(a.devicePath())

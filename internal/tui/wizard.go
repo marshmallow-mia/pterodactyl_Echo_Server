@@ -87,7 +87,7 @@ type account struct{ discordID, password, httpKey string }
 func accountGroup(a *account) *huh.Group {
 	return huh.NewGroup(
 		huh.NewInput().Title("Discord user ID").Description("The EchoVRCE account that hosts the servers.").Value(&a.discordID).Validate(digits),
-		huh.NewInput().Title("Server password (optional)").Description("Leave empty to link this host at echovrce.com/device instead, right after setup.").EchoMode(huh.EchoModePassword).Value(&a.password),
+		huh.NewInput().Title("Server password (optional)").Description("Leave empty to link this host at echovrce.com/device instead, right after setup.\n"+core.ResetPasswordNote).EchoMode(huh.EchoModePassword).Value(&a.password),
 	).Title("EchoVRCE host account")
 }
 
@@ -97,6 +97,7 @@ func linkIfNoPassword(ctx context.Context, app *core.App, a *account, say func(s
 		return nil
 	}
 	say("No password: linking this host at echovrce.com/device")
+	say(core.ResetPasswordNote)
 	s, err := app.LinkDevice(ctx, func(url, code string, expires time.Time) {
 		say("Open " + url)
 		say("and approve the code " + code + " (valid until " + expires.Local().Format(time.TimeOnly) + ")")
