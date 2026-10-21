@@ -475,6 +475,20 @@ func accountCmd(g *globals) *cobra.Command {
 			if httpKey != "" {
 				a.Secrets[config.EnvHTTPKey] = httpKey
 			}
+			// Ask for what is still missing when someone is at the terminal.
+			if a.Secrets[config.EnvDiscordID] == "" && term.IsTerminal(int(os.Stdin.Fd())) {
+				fmt.Fprint(os.Stderr, "Discord user ID of the EchoVRCE host account: ")
+				var id string
+				fmt.Scanln(&id)
+				a.Secrets[config.EnvDiscordID] = strings.TrimSpace(id)
+			}
+			if a.Secrets[config.EnvHTTPKey] == "" && term.IsTerminal(int(os.Stdin.Fd())) {
+				k, err := readSecret("EchoVRCE backend HTTP key: ")
+				if err != nil {
+					return err
+				}
+				a.Secrets[config.EnvHTTPKey] = k
+			}
 			if passwordStdin || a.Secrets[config.EnvPassword] == "" {
 				p, err := readSecret("EchoVRCE server password: ")
 				if err != nil {
