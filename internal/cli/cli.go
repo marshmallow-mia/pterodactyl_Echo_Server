@@ -38,6 +38,7 @@ type globals struct {
 // Execute runs the CLI.
 func Execute(version string) int {
 	core.Version = version
+	pcfg.SetVersion(version)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	g := &globals{out: os.Stdout}

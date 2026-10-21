@@ -229,6 +229,9 @@ func Setup(ctx context.Context, dir string, o SetupOptions, say func(step, detai
 	if err := a.syncEgg(ctx, say); err != nil {
 		return a, err
 	}
+	if err := a.syncServerImages(ctx, say); err != nil {
+		return a, err
+	}
 
 	// Mounts.
 	if cfg.GameSource == "mount" {
@@ -310,6 +313,33 @@ func (a *App) syncEgg(ctx context.Context, say func(string, string)) error {
 	}
 	a.Cfg.Panel.EggID = imported.ID
 	say("Egg", fmt.Sprintf("%q is egg #%d", egg.Name, imported.ID))
+	return nil
+}
+
+// syncServerImages moves servers that run an older image of ours to the
+// configured one, e.g. after evr-ptero was updated. It takes effect at their
+// next restart; servers with another image are left alone.
+func (a *App) syncServerImages(ctx context.Context, say func(string, string)) error {
+	all, err := a.Panel().Servers(ctx)
+	if err != nil {
+		return err
+	}
+	n := 0
+	for _, s := range all {
+		img := s.Container.Image
+		if s.Egg != a.Cfg.Panel.EggID || img == a.Cfg.Image || !strings.HasPrefix(img, pcfg.ImageRepo+":") {
+			continue
+		}
+		env := s.Env()
+		newEnv := a.Env(SettingsFromEnv(env), orStr(env["GAME_SOURCE"], a.Cfg.GameSource))
+		if err := a.Panel().UpdateStartup(ctx, s, a.Cfg.Panel.EggID, a.Cfg.Image, "evr-supervisor", newEnv, true); err != nil {
+			return fmt.Errorf("moving %s to %s: %w", s.Name, a.Cfg.Image, err)
+		}
+		n++
+	}
+	if n > 0 {
+		say("Image", fmt.Sprintf("%d server(s) moved to %s; it is used from their next restart", n, a.Cfg.Image))
+	}
 	return nil
 }
 
