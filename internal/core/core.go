@@ -29,6 +29,9 @@ import (
 // Version of evr-ptero, set by main.
 var Version = "dev"
 
+// Repo is evr-ptero's GitHub repository (releases, self-update).
+const Repo = "marshmallow-mia/pterodactyl_Echo_Server"
+
 // App bundles configuration and clients.
 type App struct {
 	Dir     string

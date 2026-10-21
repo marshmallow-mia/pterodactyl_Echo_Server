@@ -207,7 +207,7 @@ func (s state) save() error {
 	}
 	var b strings.Builder
 	b.WriteString("# Written by evr-ptero panel install (mode 0600). Keep it: re-runs reuse these values.\n")
-	for _, k := range []string{"PRODUCT", "PANEL_DIR", "URL", "ADMIN_EMAIL", "ADMIN_USER", "ADMIN_PASSWORD", "DB_PASSWORD", "NODE_ID"} {
+	for _, k := range []string{"PRODUCT", "PANEL_DIR", "PANEL_VERSION", "URL", "ADMIN_EMAIL", "ADMIN_USER", "ADMIN_PASSWORD", "DB_PASSWORD", "NODE_ID"} {
 		if v, ok := s[k]; ok {
 			fmt.Fprintf(&b, "%s=%s\n", k, v)
 		}

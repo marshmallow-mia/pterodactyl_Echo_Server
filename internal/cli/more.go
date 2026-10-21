@@ -9,11 +9,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/config"
-	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/update"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/updates"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/agent"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/core"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/pcfg"
@@ -240,40 +241,196 @@ func agentCmd(g *globals) *cobra.Command {
 	return cmd
 }
 
+// component finds an updatable part by name.
+func component(comps []updates.Component, name string) (updates.Component, error) {
+	alias := map[string]string{"evr-ptero": "self", "nevr-runtime": "runtime", "nevr": "runtime"}
+	if a, ok := alias[name]; ok {
+		name = a
+	}
+	var names []string
+	for _, c := range comps {
+		if c.Name() == name {
+			return c, nil
+		}
+		names = append(names, c.Name())
+	}
+	return nil, fmt.Errorf("unknown part %q on this host (one of: %s)", name, strings.Join(names, ", "))
+}
+
+func printStatus(g *globals, list []updates.Status, comps []updates.Component, set updates.Settings) error {
+	return g.print(list, func(w io.Writer) {
+		title := map[string]string{}
+		for _, c := range comps {
+			title[c.Name()] = c.Title()
+		}
+		var rows [][]string
+		for _, s := range list {
+			avail := "up to date"
+			switch {
+			case s.Error != "":
+				avail = "check failed: " + s.Error
+			case s.Available:
+				avail = s.Latest
+			}
+			rows = append(rows, []string{s.Component, title[s.Component], s.Installed, avail, string(set.Mode(s.Component))})
+		}
+		g.table("PART\tNAME\tINSTALLED\tAVAILABLE\tMODE", rows)
+	})
+}
+
 func updateCmd(g *globals) *cobra.Command {
-	cmd := &cobra.Command{Use: "update", Short: "Check for and roll out nevr-runtime updates on the node"}
+	check := func(cmd *cobra.Command, args []string) error {
+		a, err := g.app()
+		if err != nil {
+			return err
+		}
+		comps, set := agent.Components(a, nil), a.Cfg.Updates.Settings()
+		if len(args) == 1 {
+			c, err := component(comps, args[0])
+			if err != nil {
+				return err
+			}
+			return printStatus(g, []updates.Status{updates.CheckOne(cmd.Context(), a.Dir, c)}, comps, set)
+		}
+		return printStatus(g, updates.CheckAll(cmd.Context(), a.Dir, comps, set), comps, set)
+	}
+	cmd := &cobra.Command{
+		Use:   "update",
+		Short: "Updates of evr-ptero itself, the game files, nevr-runtime, the panel and Wings",
+		Long: `Without a subcommand: check every part. Parts: self (evr-ptero), game (the
+node's shared game files; repairs them from the mirror), runtime (nevr-runtime,
+tried on one idle server first), panel and wings (when they run on this host;
+the panel is backed up first and restored if the update fails).
+"update settings" chooses per part: off, notify (check and alert) or auto
+(install; needs the agent).`,
+		Args: cobra.NoArgs,
+		RunE: check,
+	}
+	cmd.AddCommand(&cobra.Command{Use: "check [PART]", Short: "Check for updates (all parts, or one)", Args: cobra.MaximumNArgs(1), RunE: check})
 	cmd.AddCommand(&cobra.Command{
-		Use: "check", Short: "Is a newer runtime available?",
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Use: "ls PART", Short: "List the versions a part can be updated to", Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := g.app()
 			if err != nil {
 				return err
 			}
-			cur, target, available, err := agent.Updater(a, nil).Check(cmd.Context(), update.Policy{Channel: a.Cfg.Runtime.Channel, Pinned: a.Cfg.Runtime.Pinned})
+			c, err := component(agent.Components(a, nil), args[0])
 			if err != nil {
 				return err
 			}
-			if available {
-				g.say("nevr-runtime %s is available (current %s); roll it out with: evr-ptero update apply", target.Tag, cur)
-			} else {
-				g.say("up to date (%s)", cur)
+			vs, err := c.Versions(cmd.Context())
+			if err != nil {
+				return err
 			}
+			return g.print(vs, func(w io.Writer) {
+				if len(vs) == 0 {
+					fmt.Fprintln(w, c.Title()+" has no versions to choose from; apply repairs it from the mirror.")
+				}
+				for _, v := range vs {
+					fmt.Fprintln(w, v)
+				}
+			})
+		},
+	})
+	var version string
+	var dry bool
+	apply := &cobra.Command{
+		Use: "apply [PART]", Short: "Install an update now (default part: runtime)", Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			a, err := g.app()
+			if err != nil {
+				return err
+			}
+			name := "runtime"
+			if len(args) == 1 {
+				name = args[0]
+			}
+			say := func(s string) { g.say("%s", s) }
+			c, err := component(agent.Components(a, say), name)
+			if err != nil {
+				return err
+			}
+			if dry {
+				d, ok := c.(agent.DryRunner)
+				if !ok {
+					return fmt.Errorf("%s has no dry run", c.Title())
+				}
+				script, err := d.DryRun(cmd.Context(), version)
+				fmt.Fprint(g.out, "#!/bin/bash\nset -euo pipefail\n"+script)
+				return err
+			}
+			if p, ok := c.(*agent.Panel); ok && version != "" && p.SwitchesChannel(cmd.Context(), version) &&
+				!g.confirm("Panel "+version+" is in another channel. This migrates the database one way; a backup is taken first. Continue?") {
+				return errors.New("cancelled (use --yes)")
+			}
+			if err := c.Apply(cmd.Context(), version, say); err != nil {
+				return err
+			}
+			updates.CheckOne(cmd.Context(), a.Dir, c)
 			return nil
 		},
-	})
-	cmd.AddCommand(&cobra.Command{
-		Use: "apply", Short: "Canary on an idle server, then switch the node's current runtime",
+	}
+	apply.Flags().StringVar(&version, "version", "", "version to install (default: the newest; see update ls)")
+	apply.Flags().BoolVar(&dry, "dry-run", false, "panel and wings: print the commands instead of running them")
+	cmd.AddCommand(apply)
+	var self, game, rt, pnl, wings, window, channel string
+	var hours int
+	settings := &cobra.Command{
+		Use: "settings", Short: "Show or change how each part is updated",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := g.app()
 			if err != nil {
 				return err
 			}
-			res, err := agent.Updater(a, func(s string) { g.say("%s", s) }).Run(cmd.Context(), update.Policy{Channel: a.Cfg.Runtime.Channel, Pinned: a.Cfg.Runtime.Pinned})
-			if err != nil {
-				return err
+			u := &a.Cfg.Updates
+			fl := cmd.Flags()
+			for _, f := range []struct {
+				flag string
+				dst  *string
+				val  string
+			}{{"self", &u.Self, self}, {"game", &u.Game, game}, {"runtime", &u.Runtime, rt}, {"panel", &u.Panel, pnl}, {"wings", &u.Wings, wings},
+				{"window", &u.Window, window}, {"panel-channel", &u.PanelChannel, channel}} {
+				if fl.Changed(f.flag) {
+					*f.dst = f.val
+				}
 			}
-			return g.print(res, func(w io.Writer) { fmt.Fprintf(w, "%s: %s → %s %s\n", res.Action, res.From, res.To, res.Detail) })
+			if fl.Changed("check-hours") {
+				u.CheckHours = hours
+			}
+			if fl.NFlag() > 0 {
+				if err := a.Save(); err != nil {
+					return err
+				}
+			}
+			return g.print(u, func(w io.Writer) {
+				fmt.Fprintf(w, "self:          %s\ngame:          %s\nruntime:       %s\npanel:         %s\nwings:         %s\npanel channel: %s\nwindow:        %s\ncheck every:   %s\n",
+					u.Self, u.Game, u.Runtime, u.Panel, u.Wings, dash(u.PanelChannel), dash(u.Window), a.Cfg.Updates.Settings().Interval())
+				if !agent.ServiceInstalled() {
+					fmt.Fprintln(w, "\nThe agent is not installed: nothing is checked or installed in the background (evr-ptero agent install).")
+				}
+			})
 		},
-	})
+	}
+	sf := settings.Flags()
+	for _, f := range []struct {
+		dst        *string
+		name, what string
+	}{{&self, "self", "evr-ptero itself"}, {&game, "game", "the shared game files"}, {&rt, "runtime", "nevr-runtime"}, {&pnl, "panel", "the panel"}, {&wings, "wings", "Wings"}} {
+		sf.StringVar(f.dst, f.name, "", f.what+": off, notify or auto")
+	}
+	sf.StringVar(&window, "window", "", `automatic installs only in this local time window, e.g. 04:00-06:00 ("" = any time)`)
+	sf.StringVar(&channel, "panel-channel", "", `panel releases to follow: stable or beta (Pterodactyl; "" = the installed one)`)
+	sf.IntVar(&hours, "check-hours", 0, "hours between checks")
+	cmd.AddCommand(settings)
 	return cmd
+}
+
+func postUpdateCmd(g *globals) *cobra.Command {
+	return &cobra.Command{
+		Use: "post-update", Hidden: true, Short: "Run after a self-update by the new binary: move the egg and servers to its image",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, err := core.Setup(cmd.Context(), g.dir, core.SetupOptions{}, g.step)
+			return err
+		},
+	}
 }

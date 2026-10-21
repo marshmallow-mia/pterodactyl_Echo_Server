@@ -21,6 +21,7 @@ import (
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/auth"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/supervisor"
 	ui "github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/tui"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/updates"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/core"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/pcfg"
 )
@@ -35,6 +36,9 @@ func Run(ctx context.Context, dir string) error {
 	if errors.Is(err, tea.ErrProgramKilled) || errors.Is(err, context.Canceled) {
 		return nil
 	}
+	if err == nil {
+		return reexecIfUpdated(m)
+	}
 	return err
 }
 
@@ -48,6 +52,7 @@ const (
 	scrAccount
 	scrRuntime
 	scrInfo
+	scrUpdates
 )
 
 // Model is the TUI state.
@@ -89,6 +94,11 @@ type Model struct {
 
 	infoTitle, infoText string
 
+	updTable    table.Model
+	updComps    []updates.Component
+	updChecking bool
+	reexec      bool
+
 	confirm       string
 	confirmFunc   func() tea.Cmd
 	flash         string
@@ -113,6 +123,9 @@ func New(ctx context.Context, dir string) *Model {
 	m.rtTable = table.New(table.WithColumns([]table.Column{{Title: "VERSION", Width: 14}, {Title: "STATE", Width: 12}, {Title: "INSTALLED", Width: 12}, {Title: "NOTE", Width: 40}}),
 		table.WithFocused(true), table.WithHeight(8))
 	m.rtTable.SetStyles(s)
+	m.updTable = table.New(table.WithColumns([]table.Column{{Title: "PART", Width: 18}, {Title: "INSTALLED", Width: 16}, {Title: "AVAILABLE", Width: 34}, {Title: "MODE", Width: 7}, {Title: "NOTE", Width: 30}}),
+		table.WithFocused(true), table.WithHeight(7))
+	m.updTable.SetStyles(s)
 	m.logs = ui.NewLogView(func(l string) bool { return !supervisor.DefaultFilter(supervisor.Clean(l)) })
 	app, err := core.Open(dir)
 	switch {
@@ -233,6 +246,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetWidth(msg.Width)
 		m.table.SetHeight(max(msg.Height-12, 4))
 		m.rtTable.SetWidth(msg.Width)
+		m.updTable.SetWidth(msg.Width)
+		m.updTable.SetHeight(max(min(msg.Height-12, 9), 4))
 		m.rtTable.SetHeight(max(msg.Height-14, 4))
 		m.logs.SetSize(msg.Width, msg.Height-4)
 		if m.form != nil {
@@ -270,6 +285,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case legacyMsg:
 		return m, m.migrateForm(msg)
+	case versionsMsg:
+		return m, m.applyForm(msg)
+	case updatesMsg:
+		m.updChecking = false
+		if m.screen == scrUpdates {
+			m.refreshUpdates()
+		}
+		return m, nil
 	case accountMsg:
 		m.account = msg
 		return m, nil
@@ -357,6 +380,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateAccount(msg)
 	case scrRuntime:
 		return m.updateRuntime(msg)
+	case scrUpdates:
+		return m.updateUpdates(msg)
 	case scrInfo:
 		if k, ok := msg.(tea.KeyPressMsg); ok && (k.String() == "esc" || k.String() == "q" || k.String() == "enter") {
 			m.screen = scrDashboard
@@ -446,6 +471,8 @@ func (m *Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case "m":
 		return m, m.menu()
+	case "U":
+		return m, m.openUpdates()
 	case "e":
 		if has {
 			return m, m.editForm(sel)
@@ -652,6 +679,8 @@ func (m *Model) render() string {
 		return m.renderAccount()
 	case scrRuntime:
 		return m.renderRuntime()
+	case scrUpdates:
+		return m.renderUpdates()
 	case scrInfo:
 		return m.header() + "  " + ui.Bold.Render(m.infoTitle) + "\n\n" + m.infoText + "\n" + ui.HelpBar(ui.K("esc", "back"))
 	}
@@ -669,10 +698,11 @@ func (m *Model) render() string {
 	if m.loadErr != nil {
 		body += "\n" + ui.Error.Render(m.loadErr.Error())
 	}
+	body += m.updatesNotice()
 	if !m.App.HasAccount() {
 		body += "\n" + ui.Warning.Render("The servers have no EchoVRCE sign-in yet: press ") + ui.KeyStyle.Render("c") + ui.Warning.Render(" to link this host.")
 	}
 	return m.header() + "\n\n" + body + "\n" + m.footer(
 		ui.K("enter", "console"), ui.K("s", "start"), ui.K("x", "stop"), ui.K("r", "restart"), ui.K("K", "kill"),
-		ui.K("a", "add"), ui.K("e", "edit"), ui.K("i", "reinstall"), ui.K("d", "delete"), ui.K("c", "account"), ui.K("m", "more"), ui.K("q", "quit"))
+		ui.K("a", "add"), ui.K("e", "edit"), ui.K("i", "reinstall"), ui.K("d", "delete"), ui.K("c", "account"), ui.K("U", "updates"), ui.K("m", "more"), ui.K("q", "quit"))
 }
