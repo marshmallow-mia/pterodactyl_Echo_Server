@@ -388,11 +388,8 @@ func (c *Client) ImportEgg(ctx context.Context, data []byte, update *Egg) (Egg, 
 	}
 	switch c.Kind {
 	case Pelican:
-		path := "/eggs/import"
-		if update != nil {
-			path = fmt.Sprintf("/eggs/%d/import", update.ID)
-		}
-		return decode(c.do(ctx, http.MethodPost, "/api/application"+path, c.AppKey, bytes.NewReader(data), "application/yaml", &raw))
+		// One endpoint: an egg with the same UUID is updated in place.
+		return decode(c.do(ctx, http.MethodPost, "/api/application/eggs/import", c.AppKey, bytes.NewReader(data), "application/yaml", &raw))
 	case Pterodactyl2:
 		if c.ClientKey == "" {
 			return Egg{}, errors.New("importing eggs on Pterodactyl 2 needs a root admin's account API key")
@@ -589,6 +586,26 @@ func (c *Client) EnsureMount(ctx context.Context, name, source, target string, e
 		}
 	}
 	for kind, ids := range map[string][]int{"eggs": eggs, "nodes": nodes} {
+		// Pelican attaches without de-duplicating; only send what is missing.
+		if c.Kind == Pelican {
+			var have json.RawMessage
+			if err := c.do(ctx, http.MethodGet, fmt.Sprintf("%s/%d/%s", base, m.ID, kind), key, nil, "", &have); err == nil {
+				existing, _ := items[struct {
+					ID int `json:"id"`
+				}](have)
+				seen := map[int]bool{}
+				for _, e := range existing {
+					seen[e.ID] = true
+				}
+				var missing []int
+				for _, id := range ids {
+					if !seen[id] {
+						missing = append(missing, id)
+					}
+				}
+				ids = missing
+			}
+		}
 		if len(ids) == 0 {
 			continue
 		}
