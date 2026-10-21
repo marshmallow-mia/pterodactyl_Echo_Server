@@ -533,8 +533,9 @@ func accountCmd(g *globals) *cobra.Command {
 		Use:   "link",
 		Short: "Link this host at echovrce.com/device (sign in without a password)",
 		Long: `Shows a short code to approve at echovrce.com/device and stores the resulting
-refresh token in /etc/evr-ptero/device.json. New servers get it in their
-_local/.credentials.json. The Discord ID and HTTP key still come from "account set".`,
+refresh token in /etc/evr-ptero/device.json, and takes the Discord ID from the
+backend account. New servers get the link in their _local/.credentials.json.
+No password or key has to be entered.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := g.app()
 			if err != nil {
@@ -546,7 +547,7 @@ _local/.credentials.json. The Discord ID and HTTP key still come from "account s
 			if err != nil {
 				return err
 			}
-			g.say("Linked as %s; host role in %d guild(s).", s.Username, len(s.HostGuilds()))
+			g.say("Linked as %s (Discord ID %s); host role in %d guild(s).", s.Username, a.Secrets[config.EnvDiscordID], len(s.HostGuilds()))
 			return nil
 		},
 	})
