@@ -541,6 +541,7 @@ No password or key has to be entered.`,
 			if err != nil {
 				return err
 			}
+			g.say("%s\n", core.ResetPasswordNote)
 			s, err := a.LinkDevice(cmd.Context(), func(url, code string, expires time.Time) {
 				g.say("Open %s and approve the code %s (valid until %s).", url, code, expires.Local().Format(time.TimeOnly))
 			})
