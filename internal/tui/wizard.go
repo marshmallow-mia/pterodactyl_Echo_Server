@@ -108,9 +108,11 @@ func installForm(m *Model) tea.Cmd {
 			huh.NewInput().Title("Admin email").Description("Your panel login.").Value(&o.Email).Validate(required("the email")),
 			huh.NewSelect[string]().Title("HTTPS").Options(
 				huh.NewOption("Let's Encrypt certificate (port 80 must be reachable)", "letsencrypt"),
+				huh.NewOption("Behind a reverse proxy that handles HTTPS (Pangolin, Traefik, …)", "proxy"),
 				huh.NewOption("I have a certificate", "existing"),
 				huh.NewOption("No TLS (testing only)", "none"),
 			).Value(&o.TLS),
+			huh.NewInput().Title("Wings domain (reverse proxy only)").Description("A second proxy hostname that forwards plain http to port 443 of this host, auth off.").Value(&o.WingsFQDN),
 			huh.NewInput().Title("Certificate and key files").Description("Only for 'I have a certificate': /path/fullchain.pem,/path/privkey.pem").Value(&o.CertFile),
 		).Title("Install a panel"),
 		huh.NewGroup(

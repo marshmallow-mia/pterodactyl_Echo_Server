@@ -133,6 +133,13 @@ func (l *Local) CreateAPIKey(ctx context.Context, userID int, app bool, memo str
 	}
 	code := fmt.Sprintf(`$k = app(%s\Services\Api\KeyCreationService::class)->setKeyType(%d)->handle(['user_id'=>%d,'memo'=>%s,'allowed_ips'=>[]], %s); $out = $k->identifier . decrypt($k->token);`,
 		l.ns(), typ, userID, phpString(memo), perms)
+	if l.Kind == Pterodactyl2 {
+		// 2.0 replaced KeyCreationService with the CreatesApiKeys action and
+		// dropped the nests permission.
+		perms = strings.Replace(perms, "'r_nests'=>3,", "", 1)
+		code = fmt.Sprintf(`$k = app(\Pterodactyl\Contracts\Api\CreatesApiKeys::class)->create(%d, ['user_id'=>%d,'memo'=>%s], %s); $out = $k->identifier . decrypt($k->token);`,
+			typ, userID, phpString(memo), perms)
+	}
 	raw, err := l.php(ctx, code)
 	if err != nil {
 		return "", err
