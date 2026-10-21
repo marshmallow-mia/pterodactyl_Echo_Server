@@ -62,7 +62,7 @@ func (a *App) Save() error {
 
 // Panel returns an API client.
 func (a *App) Panel() *panel.Client {
-	return &panel.Client{URL: a.Cfg.Panel.URL, AppKey: a.Secrets[pcfg.SecretAppKey], ClientKey: a.Secrets[pcfg.SecretClientKey], Kind: a.Cfg.Panel.Kind}
+	return &panel.Client{URL: a.Cfg.Panel.URL, APIURL: a.Cfg.Panel.APIURL, AppKey: a.Secrets[pcfg.SecretAppKey], ClientKey: a.Secrets[pcfg.SecretClientKey], Kind: a.Cfg.Panel.Kind}
 }
 
 // Local returns the on-host panel helper, if the panel runs here.

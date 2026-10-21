@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ import (
 // SetupOptions connect evr-ptero to a panel and prepare it for Echo VR.
 type SetupOptions struct {
 	URL        string
+	APIURL     string // where tools on this host reach the panel API (behind a proxy)
 	AppKey     string // empty with a local Pterodactyl panel: created automatically
 	ClientKey  string // admin account key (power, console; Pterodactyl 2 egg/mount API)
 	NodeID     int    // 0 picks this host's node (or the only node)
@@ -108,10 +110,14 @@ func Setup(ctx context.Context, dir string, o SetupOptions, say func(step, detai
 		}
 	}
 	set(&cfg.Panel.URL, strings.TrimRight(o.URL, "/"))
+	set(&cfg.Panel.APIURL, strings.TrimRight(o.APIURL, "/"))
 	if cfg.Panel.URL == "" {
 		return nil, errors.New("panel URL is required")
 	}
 	cfg.Panel.Local = isLocal
+	if cfg.Panel.BindIP == "" && isLocal {
+		cfg.Panel.BindIP = MainIP()
+	}
 	if isLocal {
 		a.local = local
 		say("Panel", fmt.Sprintf("found %s in %s on this host", local.Kind, local.Dir))
@@ -375,4 +381,29 @@ func (a *App) ensureAllocations(ctx context.Context, n int, say func(string, str
 	}
 	say("Allocations", fmt.Sprintf("added %d port(s) on %s", len(missing), a.Cfg.Panel.BindIP))
 	return nil
+}
+
+// MainIP returns the IPv4 address of the interface with the default route.
+func MainIP() string {
+	b, err := os.ReadFile("/proc/net/route")
+	if err != nil {
+		return ""
+	}
+	for _, l := range strings.Split(string(b), "\n")[1:] {
+		f := strings.Fields(l)
+		if len(f) < 2 || f[1] != "00000000" {
+			continue
+		}
+		ifc, err := net.InterfaceByName(f[0])
+		if err != nil {
+			continue
+		}
+		addrs, _ := ifc.Addrs()
+		for _, a := range addrs {
+			if n, ok := a.(*net.IPNet); ok && n.IP.To4() != nil {
+				return n.IP.String()
+			}
+		}
+	}
+	return ""
 }
