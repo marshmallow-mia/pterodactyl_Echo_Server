@@ -71,6 +71,8 @@ github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.0-20261021134437-475
 github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.0-20261021134437-4757bb83da27/go.mod h1:l6yeBiHu8hhY0gQfxIyXz3jEDYCm0jXXg9i/r73O6Fg=
 github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.0-20261021135649-01c0d7fa1c37 h1:Hmyfyl/1sMX9FsUkuqYzYUkl3MZ1hespDB5PXjWGS5I=
 github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.0-20261021135649-01c0d7fa1c37/go.mod h1:l6yeBiHu8hhY0gQfxIyXz3jEDYCm0jXXg9i/r73O6Fg=
+github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.0-20261021140146-2f502eb558df h1:Np7O+JDkBcVQ0RU0rbc97+WVyPoZpn8GaKYZn3MDaq8=
+github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.0-20261021140146-2f502eb558df/go.mod h1:l6yeBiHu8hhY0gQfxIyXz3jEDYCm0jXXg9i/r73O6Fg=
 github.com/mattn/go-runewidth v0.0.30 h1:+KUuiDA4fF0R1p5FeueHefjDm+GIM+kWfFnDjybOPgk=
 github.com/mattn/go-runewidth v0.0.30/go.mod h1:3qAiGCV4Koz/yuveO58qUefmUTRm8r0IGEXZ9jeHp/8=
 github.com/mitchellh/hashstructure/v2 v2.0.2 h1:vGKWl0YJqUNxE8d+h8f6NJLcCJrgbhC4NcD46KavDd4=

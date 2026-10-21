@@ -84,11 +84,11 @@ func (a *App) Auth() *auth.Client {
 
 // Login checks the EchoVRCE account.
 func (a *App) Login(ctx context.Context) (auth.Session, error) {
-	if m := a.Secrets.MissingAccount(a.DeviceLinked()); len(m) > 0 {
-		return auth.Session{}, fmt.Errorf("account not configured: %v missing (run: evr-ptero account set)", m)
+	if a.Secrets[config.EnvPassword] == "" && a.DeviceLinked() {
+		return a.refreshDevice(ctx) // also fills in a missing Discord ID
 	}
-	if a.Secrets[config.EnvPassword] == "" {
-		return a.refreshDevice(ctx)
+	if m := a.Secrets.MissingAccount(a.DeviceLinked()); len(m) > 0 {
+		return auth.Session{}, fmt.Errorf("account not configured: %v missing (run: evr-ptero account link, or account set)", m)
 	}
 	return a.Auth().Login(ctx, a.Secrets[config.EnvDiscordID], a.Secrets[config.EnvPassword])
 }
@@ -118,7 +118,21 @@ func (a *App) LinkDevice(ctx context.Context, show func(url, code string, expire
 	if err := auth.WriteCredentials(a.devicePath(), linked); err != nil {
 		return auth.Session{}, err
 	}
-	return linked.Session, nil
+	return linked.Session, a.fillDiscordID(ctx, linked.Session)
+}
+
+// fillDiscordID stores the account's Discord ID from the backend when it is
+// not configured yet, so a device link is all an operator has to do.
+func (a *App) fillDiscordID(ctx context.Context, s auth.Session) error {
+	if a.Secrets[config.EnvDiscordID] != "" {
+		return nil
+	}
+	id, err := a.Auth().DiscordID(ctx, s)
+	if err != nil {
+		return fmt.Errorf("looking up the Discord ID: %w", err)
+	}
+	a.Secrets[config.EnvDiscordID] = id
+	return a.Secrets.Save(a.Dir)
 }
 
 // refreshDevice signs in with the stored device link and saves the rotated token.
@@ -140,7 +154,7 @@ func (a *App) refreshDevice(ctx context.Context) (auth.Session, error) {
 	if err := auth.WriteCredentials(a.devicePath(), linked); err != nil {
 		return auth.Session{}, err
 	}
-	return linked.Session, nil
+	return linked.Session, a.fillDiscordID(ctx, linked.Session)
 }
 
 // installDeviceLink copies the device link into a server's volume, where the
@@ -391,8 +405,13 @@ func (a *App) CreateServers(ctx context.Context, n int, set instance.Settings, s
 	if a.Cfg.Panel.EggID == 0 || a.Cfg.Panel.NodeID == 0 {
 		return nil, errors.New("the panel is not set up yet (run: evr-ptero panel setup)")
 	}
+	if a.Secrets[config.EnvDiscordID] == "" && a.DeviceLinked() {
+		if _, err := a.Login(ctx); err != nil {
+			return nil, err
+		}
+	}
 	if m := a.Secrets.MissingAccount(a.DeviceLinked()); len(m) > 0 {
-		return nil, fmt.Errorf("account not configured: %v missing", m)
+		return nil, fmt.Errorf("account not configured: %v missing (run: evr-ptero account link)", m)
 	}
 	set = a.Cfg.Defaults.Merge(set)
 	if err := set.Validate(); err != nil {
