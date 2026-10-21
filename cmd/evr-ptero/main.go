@@ -5,8 +5,12 @@ import (
 	"os"
 
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/cli"
+	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/tui"
 )
 
 var version = "dev"
 
-func main() { os.Exit(cli.Execute(version)) }
+func main() {
+	cli.TUI = tui.Run
+	os.Exit(cli.Execute(version))
+}
