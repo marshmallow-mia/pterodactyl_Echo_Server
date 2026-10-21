@@ -24,9 +24,12 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-      - name: Base image of the same version
+      - name: Base image of the pinned evr-docker version
         id: base
-        run: echo "ref=ghcr.io/${{ github.repository_owner }}/echovr-server:${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          v=$(awk '$1 == "github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2" {print $2}' go.mod)
+          case "$v" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "go.mod must pin a released evr-docker version, got '$v'" >&2; exit 1;; esac
+          echo "ref=ghcr.io/${{ github.repository_owner }}/echovr-server:${v#v}" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v6
         with:
           context: .
