@@ -164,6 +164,7 @@ func (m *Model) menu() tea.Cmd {
 		huh.NewOption("EchoVRCE account", "account"),
 		huh.NewOption("Move servers from an old Echo egg", "migrate"),
 		huh.NewOption("Panel connection", "panel"),
+		huh.NewOption("Panel admin login and password", "login"),
 		huh.NewOption("Re-run the panel setup (egg, mounts, allocations, game files)", "setup"),
 		huh.NewOption("Write the egg files", "egg"),
 	}
@@ -184,6 +185,8 @@ func (m *Model) menu() tea.Cmd {
 		case "panel":
 			m.showPanelInfo()
 			return nil
+		case "login":
+			return m.panelLoginForm()
 		case "setup":
 			return m.rerunSetup()
 		case "egg":
@@ -222,8 +225,8 @@ func (m *Model) showPanelInfo() {
 	row("Shared files", fmt.Sprintf("%s (%s)", cfg.DataDir, cfg.GameSource))
 	row("Image", cfg.Image)
 	row("Config", filepath.Join(m.Dir, "config.yaml"))
-	if _, err := os.Stat(filepath.Join(m.Dir, "install.env")); err == nil {
-		row("Panel login", filepath.Join(m.Dir, "install.env")+" (from the install)")
+	if email, _, _ := panelinstall.AdminLogin(); email != "" {
+		row("Panel login", email+" (More → Panel admin login and password)")
 	}
 	if m.App.Secrets[pcfg.SecretClientKey] == "" {
 		b.WriteString("\n" + ui.Warning.Render("No admin account API key: servers cannot be started or show their console from here.") + "\n")
@@ -584,5 +587,74 @@ func (m *Model) uninstallForm() tea.Cmd {
 		return m.Run("Uninstalling the panel", func(ctx context.Context, say func(string)) error {
 			return panelinstall.Uninstall(ctx, o, &panelinstall.Runner{Log: say})
 		}, func() tea.Cmd { return tea.Quit })
+	})
+}
+
+// Panel admin login.
+
+func (m *Model) panelLoginForm() tea.Cmd {
+	app := m.App
+	email, user, stored := panelinstall.AdminLogin()
+	action := "set"
+	desc := "The panel was not installed by evr-ptero on this host, so its password is not known here.\nYou can still set a new one for a panel user."
+	if email != "" {
+		desc = fmt.Sprintf("Panel:    %s\nEmail:    %s\nUsername: %s", app.Cfg.Panel.URL, email, user)
+	}
+	opts := []huh.Option[string]{
+		huh.NewOption("Set a new password", "set"),
+		huh.NewOption("Generate a new password", "generate"),
+	}
+	if stored != "" {
+		opts = append([]huh.Option[string]{huh.NewOption("Show the current password", "show")}, opts...)
+		action = "show"
+	}
+	target, password, again := email, "", ""
+	f := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().Title("Panel admin login").Description(desc),
+			huh.NewSelect[string]().Title("What do you want to do?").Options(opts...).Value(&action),
+		).Title("Panel login"),
+		huh.NewGroup(
+			huh.NewInput().Title("Panel user (email)").Description("Empty: the admin.").Value(&target),
+			huh.NewInput().Title("New password").Description(fmt.Sprintf("At least %d characters.", core.MinPanelPassword)).EchoMode(huh.EchoModePassword).Value(&password).
+				Validate(func(s string) error {
+					if len(s) < core.MinPanelPassword {
+						return fmt.Errorf("at least %d characters", core.MinPanelPassword)
+					}
+					return nil
+				}),
+			huh.NewInput().Title("New password again").EchoMode(huh.EchoModePassword).Value(&again).Validate(func(s string) error {
+				if s != password {
+					return errors.New("the passwords do not match")
+				}
+				return nil
+			}),
+		).WithHideFunc(func() bool { return action != "set" }),
+		huh.NewGroup(
+			huh.NewInput().Title("Panel user (email)").Description("Empty: the admin.").Value(&target),
+		).WithHideFunc(func() bool { return action != "generate" }),
+	)
+	return m.ShowForm(f, func() tea.Cmd {
+		if action == "show" {
+			m.screen, m.infoTitle = scrInfo, "panel login"
+			m.infoText = fmt.Sprintf("  Panel     %s\n  Email     %s\n  Username  %s\n  Password  %s\n\n", app.Cfg.Panel.URL, email, user, stored) +
+				ui.Subtle.Render("  Kept in "+filepath.Join(m.Dir, "install.env")+" (root only). Change it here with More → Panel admin login and password.") + "\n"
+			return nil
+		}
+		if action == "generate" {
+			password = panelinstall.RandomPassword()
+		}
+		return m.Run("Changing the panel password", func(ctx context.Context, say func(string)) error {
+			u, err := app.SetPanelPassword(ctx, target, password)
+			if err != nil {
+				return err
+			}
+			if action == "generate" {
+				say(fmt.Sprintf("New password for %s (%s): %s", u.Email, u.Username, password))
+			} else {
+				say(fmt.Sprintf("Password of %s (%s) changed.", u.Email, u.Username))
+			}
+			return nil
+		}, nil)
 	})
 }

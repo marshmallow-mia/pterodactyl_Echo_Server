@@ -127,7 +127,7 @@ func installForm(m *Model) tea.Cmd {
 	o := panelinstall.Options{TLS: "letsencrypt"}
 	product := "pterodactyl-stable"
 	httpPort, httpsPorts, wingsPort, ports := "80", "443", "8080", "10"
-	var alias string
+	var alias, adminPassword, adminAgain string
 	acct := &account{}
 	f := huh.NewForm(append([]*huh.Group{
 		huh.NewGroup(
@@ -138,6 +138,19 @@ func installForm(m *Model) tea.Cmd {
 			).Value(&product),
 			huh.NewInput().Title("Domain name").Description("Must point at this host's public IP.").Value(&o.FQDN).Validate(required("the domain")),
 			huh.NewInput().Title("Admin email").Description("Your panel login.").Value(&o.Email).Validate(required("the email")),
+			huh.NewInput().Title("Admin password").Description(fmt.Sprintf("At least %d characters. Leave empty to have one generated (shown at the end and kept in /etc/evr-ptero/install.env).", core.MinPanelPassword)).
+				EchoMode(huh.EchoModePassword).Value(&adminPassword).Validate(func(s string) error {
+				if s != "" && len(s) < core.MinPanelPassword {
+					return fmt.Errorf("at least %d characters", core.MinPanelPassword)
+				}
+				return nil
+			}),
+			huh.NewInput().Title("Admin password again").EchoMode(huh.EchoModePassword).Value(&adminAgain).Validate(func(s string) error {
+				if s != adminPassword {
+					return errors.New("the passwords do not match")
+				}
+				return nil
+			}),
 			huh.NewSelect[string]().Title("HTTPS").Options(
 				huh.NewOption("Let's Encrypt certificate (port 80 must be reachable)", "letsencrypt"),
 				huh.NewOption("Behind a reverse proxy that handles HTTPS (Pangolin, Traefik, …)", "proxy"),
@@ -179,6 +192,7 @@ func installForm(m *Model) tea.Cmd {
 		case "pelican":
 			o.Product = "pelican"
 		}
+		o.AdminPassword = adminPassword
 		o.HTTPPort, _ = strconv.Atoi(httpPort)
 		o.WingsPort, _ = strconv.Atoi(wingsPort)
 		o.HTTPSPorts = panelinstall.Ports(httpsPorts)
@@ -189,7 +203,12 @@ func installForm(m *Model) tea.Cmd {
 			if err != nil {
 				return err
 			}
-			say(fmt.Sprintf("Panel ready at %s, login %s / %s (also in /etc/evr-ptero/install.env)", res.URL, res.AdminEmail, res.AdminPassword))
+			if adminPassword == "" {
+				say(fmt.Sprintf("Panel ready at %s, login %s with the generated password %s", res.URL, res.AdminEmail, res.AdminPassword))
+			} else {
+				say(fmt.Sprintf("Panel ready at %s, login %s with your password", res.URL, res.AdminEmail))
+			}
+			say("(m → Panel admin login shows or changes it later)")
 			so := core.SetupOptions{URL: res.URL, APIURL: res.APIURL, AppKey: res.AppKey, ClientKey: res.ClientKey, NodeID: res.NodeID, Alias: alias, Ports: n}
 			so.Account.DiscordID, so.Account.Password = acct.fields()
 			so.Account.HTTPKey = acct.httpKey

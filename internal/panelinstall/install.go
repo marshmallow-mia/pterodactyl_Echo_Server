@@ -215,6 +215,27 @@ func (s state) save() error {
 	return os.WriteFile(stateFile, []byte(b.String()), 0o600)
 }
 
+// AdminLogin returns the panel admin login the installer created on this
+// host (empty without an install here).
+func AdminLogin() (email, user, password string) {
+	st := loadState()
+	return st["ADMIN_EMAIL"], st["ADMIN_USER"], st["ADMIN_PASSWORD"]
+}
+
+// SetAdminPassword records a changed admin password, so re-runs of the
+// installer and the TUI show the current one.
+func SetAdminPassword(password string) error {
+	st := loadState()
+	if st["ADMIN_EMAIL"] == "" {
+		return nil
+	}
+	st["ADMIN_PASSWORD"] = password
+	return st.save()
+}
+
+// RandomPassword returns a password for a panel account.
+func RandomPassword() string { return randomString(20) }
+
 func randomString(n int) string {
 	const chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 	b := make([]byte, n)
