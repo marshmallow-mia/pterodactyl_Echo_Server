@@ -1,0 +1,67 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+  packages: write
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/echovr-pterodactyl
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+      - name: Base image of the same version
+        id: base
+        run: echo "ref=ghcr.io/${{ github.repository_owner }}/echovr-server:${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: image/Dockerfile
+          push: true
+          build-args: |
+            BASE=${{ steps.base.outputs.ref }}
+            VERSION=${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+  release:
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./... -count=1
+      - name: Build
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          mkdir dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w -X main.version=$v" -o dist/evr-ptero_linux_$arch ./cmd/evr-ptero
+          done
+          img=ghcr.io/${{ github.repository_owner }}/echovr-pterodactyl:$v
+          go run -ldflags "-X main.version=$v" ./cmd/evr-ptero egg export --format ptdl --image $img -o dist/egg-echovr-nevr.json
+          go run -ldflags "-X main.version=$v" ./cmd/evr-ptero egg export --format plcn --image $img -o dist/egg-echovr-nevr.yaml
+          cp install.sh dist/
+          cd dist && sha256sum * > checksums.txt
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""
+          case "$GITHUB_REF_NAME" in *-*) pre="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --generate-notes $pre
