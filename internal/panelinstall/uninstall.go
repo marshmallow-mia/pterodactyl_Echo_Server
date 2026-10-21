@@ -36,10 +36,11 @@ docker network rm pterodactyl_nw pelican_nw >/dev/null 2>&1 || true`)
   mariadb -e "DROP DATABASE IF EXISTS panel; DROP USER IF EXISTS 'pterodactyl'@'127.0.0.1'; DROP USER IF EXISTS 'pelican'@'127.0.0.1';"
 fi
 rm -rf /var/www/pterodactyl /var/www/pelican /etc/nginx/sites-enabled/pterodactyl.conf /etc/nginx/sites-available/pterodactyl.conf /etc/nginx/sites-enabled/pelican.conf /etc/nginx/sites-available/pelican.conf
-rm -f /etc/cron.d/pterodactyl; crontab -u www-data -r 2>/dev/null || true
+rm -f /etc/cron.d/pterodactyl /etc/cron.d/pelican; crontab -u www-data -r 2>/dev/null || true
 systemctl reload nginx 2>/dev/null || true
 rm -rf /usr/local/bin/wings /etc/pterodactyl /etc/pelican /var/lib/pterodactyl /var/lib/pelican /var/log/pterodactyl /var/log/pelican /tmp/pterodactyl /tmp/pelican /var/run/wings
 userdel pterodactyl 2>/dev/null || true; userdel pelican 2>/dev/null || true
+`+staleBridges+`
 rm -f /etc/evr-ptero/install.env /etc/evr-ptero/config.yaml /etc/evr-ptero/secrets.env`)
 		}},
 	}
@@ -56,7 +57,8 @@ rm -rf /etc/nginx /var/lib/mysql /etc/mysql /etc/php /var/lib/php /etc/redis /va
 			return r.Sh(ctx, `docker ps -aq | xargs -r docker rm -f >/dev/null 2>&1 || true
 pk=$(dpkg-query -W -f='${Package}\n' | grep -E '^(docker-|containerd)' | tr '\n' ' ')
 [ -z "$pk" ] || apt-get purge -y -qq $pk >/dev/null
-rm -rf /var/lib/docker /var/lib/containerd /etc/docker /etc/apt/sources.list.d/docker.list`)
+rm -rf /var/lib/docker /var/lib/containerd /etc/docker /etc/apt/sources.list.d/docker.list
+`+staleBridges)
 		}})
 	}
 	if o.Certificates {
@@ -66,6 +68,13 @@ rm -rf /var/lib/docker /var/lib/containerd /etc/docker /etc/apt/sources.list.d/d
 	}
 	return r.Execute(ctx, steps)
 }
+
+// staleBridges deletes the Wings bridge interfaces whose Docker network is
+// gone. Both products use 172.18.0.0/16, so a leftover bridge breaks routing.
+const staleBridges = `for n in pterodactyl pelican; do
+  ip link show ${n}0 >/dev/null 2>&1 || continue
+  docker network inspect ${n}_nw >/dev/null 2>&1 || ip link delete ${n}0
+done`
 
 // Ports parses "444,443".
 func Ports(s string) []int {

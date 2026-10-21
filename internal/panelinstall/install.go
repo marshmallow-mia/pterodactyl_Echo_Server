@@ -327,6 +327,11 @@ func (in *installer) steps() []Step {
 			if Exists(other) {
 				return fmt.Errorf("another panel is installed (%s); remove it first with: evr-ptero panel uninstall", filepath.Dir(other))
 			}
+			// A bridge left behind by the other product's Wings holds the same
+			// subnet and steals the route back into the game containers.
+			if err := r.Sh(ctx, staleBridges); err != nil {
+				return err
+			}
 			for _, p := range append([]int{o.HTTPPort, o.WingsPort, o.SFTPPort}, o.HTTPSPorts...) {
 				if busy(p) && !ownsPort(p) {
 					return fmt.Errorf("TCP port %d is in use by another program", p)
@@ -441,8 +446,11 @@ grep -q '^APP_KEY=base64:' .env || %[2]s
 		}},
 		{Name: "Queue worker and scheduler", Run: func(ctx context.Context, r *Runner) error {
 			if pelican {
-				return r.Sh(ctx, fmt.Sprintf(`cd %[1]s && HOME=/tmp php artisan p:environment:queue-service -n --overwrite
-grep -q 'artisan schedule:run' <(crontab -u www-data -l 2>/dev/null) || (crontab -u www-data -l 2>/dev/null; echo '* * * * * php %[1]s/artisan schedule:run >> /dev/null 2>&1') | crontab -u www-data -`, in.dir))
+				if err := r.WriteFile("/etc/cron.d/pelican", fmt.Sprintf("* * * * * www-data php %s/artisan schedule:run >> /dev/null 2>&1\n", in.dir), 0o644); err != nil {
+					return err
+				}
+				return r.Sh(ctx, fmt.Sprintf(`cd %s && HOME=/tmp php artisan p:environment:queue-service -n --overwrite
+systemctl daemon-reload && systemctl enable --now pelican-queue >/dev/null 2>&1 && systemctl restart pelican-queue`, in.dir))
 			}
 			queues := "high,standard,low"
 			if beta {
