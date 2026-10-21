@@ -486,8 +486,9 @@ func (a *App) startWhenInstalled(ctx context.Context, s panel.Server, say func(s
 			if err == nil {
 				break
 			}
+			// Pterodactyl 2 answers 403 ("installation state") while installing.
 			var ae *panel.APIError
-			if !errors.As(err, &ae) || (ae.Status != 409 && ae.Status != 400 && ae.Status != 422) || time.Now().After(deadline) {
+			if !errors.As(err, &ae) || (ae.Status != 409 && ae.Status != 400 && ae.Status != 422 && ae.Status != 403) || time.Now().After(deadline) {
 				return fmt.Errorf("%s: attaching the shared files: %w", s.Name, err)
 			}
 			select {
