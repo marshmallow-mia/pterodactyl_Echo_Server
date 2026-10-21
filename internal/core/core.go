@@ -394,9 +394,10 @@ func (a *App) startWhenInstalled(ctx context.Context, s panel.Server, say func(s
 			}
 			return nil
 		}
-		// 409 while the server is still installing.
+		// 409 while the server is still installing; 502/504 while Wings is
+		// busy, e.g. pulling the image on the first start.
 		var ae *panel.APIError
-		if !errors.As(err, &ae) || ae.Status != 409 {
+		if !errors.As(err, &ae) || (ae.Status != 409 && ae.Status != 502 && ae.Status != 504) {
 			return err
 		}
 		select {
