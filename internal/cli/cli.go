@@ -170,7 +170,7 @@ create the mounts yourself when asked.`,
 	f.IntVar(&o.OwnerID, "owner", 0, "panel user ID that owns new servers (default: first admin)")
 	f.BoolVar(&o.SkipFiles, "skip-files", false, "do not install the shared game files now")
 	f.StringVar(&o.Account.DiscordID, "discord-id", "", "EchoVRCE host account Discord ID")
-	f.StringVar(&o.Account.HTTPKey, "http-key", "", "EchoVRCE backend HTTP key")
+	f.StringVar(&o.Account.HTTPKey, "http-key", "", "EchoVRCE backend HTTP key (default: the public key)")
 	f.BoolVar(&passwordStdin, "password-stdin", false, "read the EchoVRCE password from stdin")
 	cmd.AddCommand(setup)
 	panelInstallCmds(g, cmd)
@@ -482,13 +482,6 @@ func accountCmd(g *globals) *cobra.Command {
 				fmt.Scanln(&id)
 				a.Secrets[config.EnvDiscordID] = strings.TrimSpace(id)
 			}
-			if a.Secrets[config.EnvHTTPKey] == "" && term.IsTerminal(int(os.Stdin.Fd())) {
-				k, err := readSecret("EchoVRCE backend HTTP key: ")
-				if err != nil {
-					return err
-				}
-				a.Secrets[config.EnvHTTPKey] = k
-			}
 			if noPassword {
 				delete(a.Secrets, config.EnvPassword)
 				if err := a.Secrets.Save(a.Dir); err != nil {
@@ -530,7 +523,7 @@ func accountCmd(g *globals) *cobra.Command {
 		},
 	}
 	set.Flags().StringVar(&discordID, "discord-id", "", "Discord user ID")
-	set.Flags().StringVar(&httpKey, "http-key", "", "backend HTTP key")
+	set.Flags().StringVar(&httpKey, "http-key", "", "backend HTTP key (default: the public key nevr-runtime embeds)")
 	set.Flags().BoolVar(&passwordStdin, "password-stdin", false, "read the password from stdin")
 	set.Flags().BoolVar(&noPassword, "no-password", false, "no password: sign in with a device link instead (evr-ptero account link)")
 	set.Flags().StringVar(&gameDir, "from-game-dir", "", "take the account from an old game directory's _local/config.yaml or config.json")

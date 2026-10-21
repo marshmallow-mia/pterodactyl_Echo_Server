@@ -52,7 +52,7 @@ func addInstallFlags(cmd *cobra.Command, f *installFlags) {
 	fl.StringVar(&f.alias, "alias", "", "allocation alias shown in the panel (e.g. the public IP)")
 	fl.IntVar(&f.ports, "ports", 10, "game ports to allocate from 6792")
 	fl.StringVar(&f.account.discordID, "discord-id", "", "EchoVRCE host account Discord ID")
-	fl.StringVar(&f.account.httpKey, "http-key", "", "EchoVRCE backend HTTP key")
+	fl.StringVar(&f.account.httpKey, "http-key", "", "EchoVRCE backend HTTP key (default: the public key)")
 	fl.BoolVar(&f.passwordStdin, "password-stdin", false, "read the EchoVRCE password from stdin")
 }
 

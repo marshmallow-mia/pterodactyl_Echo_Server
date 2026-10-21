@@ -93,7 +93,13 @@ func Setup(ctx context.Context, dir string, o SetupOptions, say func(step, detai
 		sec[pcfg.SecretClientKey] = o.ClientKey
 	}
 	if o.Account.DiscordID != "" {
-		sec[config.EnvDiscordID], sec[config.EnvPassword], sec[config.EnvHTTPKey] = o.Account.DiscordID, o.Account.Password, o.Account.HTTPKey
+		sec[config.EnvDiscordID] = o.Account.DiscordID
+		if o.Account.Password != "" {
+			sec[config.EnvPassword] = o.Account.Password
+		}
+		if o.Account.HTTPKey != "" {
+			sec[config.EnvHTTPKey] = o.Account.HTTPKey
+		}
 	}
 
 	// Panel URL and keys.

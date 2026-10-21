@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
@@ -86,9 +87,25 @@ type account struct{ discordID, password, httpKey string }
 func accountGroup(a *account) *huh.Group {
 	return huh.NewGroup(
 		huh.NewInput().Title("Discord user ID").Description("The EchoVRCE account that hosts the servers.").Value(&a.discordID).Validate(digits),
-		huh.NewInput().Title("Server password").Description("Set with the EchoVRCE bot.").EchoMode(huh.EchoModePassword).Value(&a.password).Validate(required("the password")),
-		huh.NewInput().Title("Backend HTTP key").EchoMode(huh.EchoModePassword).Value(&a.httpKey).Validate(required("the HTTP key")),
+		huh.NewInput().Title("Server password (optional)").Description("Leave empty to link this host at echovrce.com/device instead, right after setup.").EchoMode(huh.EchoModePassword).Value(&a.password),
 	).Title("EchoVRCE host account")
+}
+
+// linkIfNoPassword runs the device link when no password was given.
+func linkIfNoPassword(ctx context.Context, app *core.App, a *account, say func(string)) error {
+	if a.password != "" {
+		return nil
+	}
+	say("No password: linking this host at echovrce.com/device")
+	s, err := app.LinkDevice(ctx, func(url, code string, expires time.Time) {
+		say("Open " + url)
+		say("and approve the code " + code + " (valid until " + expires.Local().Format(time.TimeOnly) + ")")
+	})
+	if err != nil {
+		return err
+	}
+	say(fmt.Sprintf("Linked as %s; host role in %d guild(s)", s.Username, len(s.HostGuilds())))
+	return nil
 }
 
 func installForm(m *Model) tea.Cmd {
@@ -151,10 +168,11 @@ func installForm(m *Model) tea.Cmd {
 			so := core.SetupOptions{URL: res.URL, APIURL: res.APIURL, AppKey: res.AppKey, ClientKey: res.ClientKey, NodeID: res.NodeID, Alias: alias, Ports: n}
 			so.Account.DiscordID, so.Account.Password, so.Account.HTTPKey = acct.discordID, acct.password, acct.httpKey
 			app, err := core.Setup(ctx, m.Dir, so, func(step, detail string) { say(step + ": " + detail) })
-			if err == nil {
-				m.App = app
+			if err != nil {
+				return err
 			}
-			return err
+			m.App = app
+			return linkIfNoPassword(ctx, app, acct, say)
 		}, func() tea.Cmd { return m.LoadServers() })
 	})
 }
@@ -184,10 +202,11 @@ func connectForm(m *Model, local bool) tea.Cmd {
 			so := core.SetupOptions{URL: url, AppKey: appKey, ClientKey: clientKey, BindIP: bindIP, Alias: alias, Ports: n}
 			so.Account.DiscordID, so.Account.Password, so.Account.HTTPKey = acct.discordID, acct.password, acct.httpKey
 			app, err := core.Setup(ctx, m.Dir, so, func(step, detail string) { say(step + ": " + detail) })
-			if err == nil {
-				m.App = app
+			if err != nil {
+				return err
 			}
-			return err
+			m.App = app
+			return linkIfNoPassword(ctx, app, acct, say)
 		}, func() tea.Cmd { return m.LoadServers() })
 	})
 }
