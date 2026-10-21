@@ -127,7 +127,7 @@ func (a *Agent) checkUpdates(ctx context.Context, app *core.App, host string) {
 		cur, target, available, err := u.Check(ctx, pol)
 		if err == nil && available {
 			_ = n.Send(ctx, notify.Event{Kind: notify.EventUpdateAvailable, Level: notify.Info, Host: host,
-				Title: "nevr-runtime " + target.Tag + " is available", Text: "Current: " + cur + ". Roll it out with `evr-ptero update apply`."})
+				Title: "nevr-runtime " + target.Tag + " is available", Text: "Current: " + cur + ". Roll it out in evr-ptero (m → Runtime & updates) or with `evr-ptero update apply`."})
 		}
 		return
 	}

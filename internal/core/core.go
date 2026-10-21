@@ -88,7 +88,7 @@ func (a *App) Login(ctx context.Context) (auth.Session, error) {
 		return a.refreshDevice(ctx) // also fills in a missing Discord ID
 	}
 	if m := a.Secrets.MissingAccount(a.DeviceLinked()); len(m) > 0 {
-		return auth.Session{}, fmt.Errorf("account not configured: %v missing (run: evr-ptero account link, or account set)", m)
+		return auth.Session{}, fmt.Errorf("%w (%v missing)", ErrNoAccount, m)
 	}
 	return a.Auth().Login(ctx, a.Secrets[config.EnvDiscordID], a.Secrets[config.EnvPassword])
 }
@@ -98,7 +98,7 @@ func (a *App) devicePath() string { return filepath.Join(a.Dir, pcfg.DeviceFile)
 // ResetPasswordNote is shown before a device link starts.
 const ResetPasswordNote = "Device sign-in needs an EchoVRCE account without a password. If you ever set one for hosting, run /reset-password in the Echo VR Lounge Discord first."
 
-// DeviceLinked reports whether `account link` stored a device link.
+// DeviceLinked reports whether a device link is stored.
 func (a *App) DeviceLinked() bool {
 	_, err := os.Stat(a.devicePath())
 	return err == nil
@@ -142,7 +142,7 @@ func (a *App) fillDiscordID(ctx context.Context, s auth.Session) error {
 func (a *App) refreshDevice(ctx context.Context) (auth.Session, error) {
 	b, err := os.ReadFile(a.devicePath())
 	if err != nil {
-		return auth.Session{}, fmt.Errorf("no password and no device link (run: evr-ptero account link): %w", err)
+		return auth.Session{}, fmt.Errorf("%w: %v", ErrNoAccount, err)
 	}
 	var cred struct {
 		RefreshToken string `json:"refresh_token"`
@@ -406,7 +406,7 @@ func orStr(v, d string) string {
 // CreateServers creates n Echo VR servers on free allocations of the node.
 func (a *App) CreateServers(ctx context.Context, n int, set instance.Settings, say func(string)) ([]panel.Server, error) {
 	if a.Cfg.Panel.EggID == 0 || a.Cfg.Panel.NodeID == 0 {
-		return nil, errors.New("the panel is not set up yet (run: evr-ptero panel setup)")
+		return nil, ErrNotSetUp
 	}
 	if a.Secrets[config.EnvDiscordID] == "" && a.DeviceLinked() {
 		if _, err := a.Login(ctx); err != nil {
@@ -414,7 +414,7 @@ func (a *App) CreateServers(ctx context.Context, n int, set instance.Settings, s
 		}
 	}
 	if m := a.Secrets.MissingAccount(a.DeviceLinked()); len(m) > 0 {
-		return nil, fmt.Errorf("account not configured: %v missing (run: evr-ptero account link)", m)
+		return nil, fmt.Errorf("%w (%v missing)", ErrNoAccount, m)
 	}
 	set = a.Cfg.Defaults.Merge(set)
 	if err := set.Validate(); err != nil {
@@ -471,7 +471,7 @@ func (a *App) CreateServers(ctx context.Context, n int, set instance.Settings, s
 
 func (a *App) attachMounts(ctx context.Context, s panel.Server) error {
 	if len(a.Cfg.Panel.MountIDs) == 0 {
-		return errors.New("no shared-file mounts are set up (run: evr-ptero panel setup)")
+		return fmt.Errorf("%w: no shared-file mounts", ErrNotSetUp)
 	}
 	if l := a.Local(); l != nil && l.Kind == panel.Pterodactyl1 {
 		return l.AttachMount(ctx, s.ID, a.Cfg.Panel.MountIDs)

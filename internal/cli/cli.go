@@ -64,12 +64,28 @@ you can import egg/egg-echovr-nevr.json yourself and manage everything in the pa
 	root.AddCommand(initCmd(g), panelCmd(g), eggCmd(g), filesCmd(g), serverCmd(g), accountCmd(g), runtimeCmd(g), migrateCmd(g), agentCmd(g), updateCmd(g))
 	if err := root.ExecuteContext(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
+		if hint := hintFor(err); hint != "" {
+			fmt.Fprintln(os.Stderr, hint)
+		}
 		return 1
 	}
 	return 0
 }
 
 func (g *globals) app() (*core.App, error) { return core.Open(g.dir) }
+
+// hintFor names the command that fixes err; the TUI shows keys instead.
+func hintFor(err error) string {
+	switch {
+	case errors.Is(err, pcfg.ErrNotInitialized):
+		return "Set up with: evr-ptero (the wizard) or evr-ptero init --help"
+	case errors.Is(err, core.ErrNoAccount):
+		return "Sign in with: evr-ptero account link (no password), or evr-ptero account set (Discord ID and password)"
+	case errors.Is(err, core.ErrNotSetUp):
+		return "Prepare the panel with: evr-ptero panel setup"
+	}
+	return ""
+}
 
 func (g *globals) say(f string, a ...any) {
 	if !g.json {
@@ -135,7 +151,7 @@ func splitList(s string) []string {
 func panelCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{Use: "panel", Short: "Connect to and prepare the panel"}
 	var o core.SetupOptions
-	var passwordStdin bool
+	var passwordStdin, noLink bool
 	setup := &cobra.Command{
 		Use:   "setup",
 		Short: "Prepare the panel: API keys, node, shared files, egg, mounts, allocations",
@@ -153,8 +169,11 @@ create the mounts yourself when asked.`,
 				}
 				o.Account.Password = p
 			}
-			_, err := core.Setup(cmd.Context(), g.dir, o, g.step)
-			return err
+			app, err := core.Setup(cmd.Context(), g.dir, o, g.step)
+			if err != nil {
+				return err
+			}
+			return linkAfterSetup(cmd, g, app, noLink)
 		},
 	}
 	f := setup.Flags()
@@ -173,6 +192,7 @@ create the mounts yourself when asked.`,
 	f.StringVar(&o.Account.DiscordID, "discord-id", "", "EchoVRCE host account Discord ID")
 	f.StringVar(&o.Account.HTTPKey, "http-key", "", "EchoVRCE backend HTTP key (default: the public key)")
 	f.BoolVar(&passwordStdin, "password-stdin", false, "read the EchoVRCE password from stdin")
+	f.BoolVar(&noLink, "no-link", false, "without a password: do not link this host at echovrce.com/device now")
 	cmd.AddCommand(setup)
 	panelInstallCmds(g, cmd)
 	cmd.AddCommand(&cobra.Command{
@@ -453,104 +473,85 @@ func accountCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{Use: "account", Short: "EchoVRCE host account"}
 	var discordID, httpKey, gameDir string
 	var passwordStdin, applyAll, noPassword bool
+	link := func(cmd *cobra.Command, a *core.App) error {
+		g.say("%s\n", core.ResetPasswordNote)
+		_, err := a.UseDeviceLink(cmd.Context(), func(url, code string, expires time.Time) {
+			g.say("Open %s and approve the code %s (valid until %s).", url, code, expires.Local().Format(time.TimeOnly))
+		}, func(s string) { g.say("%s", s) })
+		return err
+	}
 	set := &cobra.Command{
-		Use: "set", Short: "Store the account (and with --apply update every server)",
+		Use: "set", Short: "Sign in with a Discord ID and server password, and update every server",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := g.app()
 			if err != nil {
 				return err
 			}
-			if gameDir != "" {
-				id, pw, key := legacyCredentials(gameDir)
-				if id == "" {
-					return fmt.Errorf("no credentials found in %s/_local", gameDir)
-				}
-				a.Secrets[config.EnvDiscordID], a.Secrets[config.EnvPassword] = id, pw
-				if key != "" {
-					a.Secrets[config.EnvHTTPKey] = key
-				}
-			}
-			if discordID != "" {
-				a.Secrets[config.EnvDiscordID] = discordID
-			}
 			if httpKey != "" {
 				a.Secrets[config.EnvHTTPKey] = httpKey
-			}
-			// Ask for what is still missing when someone is at the terminal.
-			if a.Secrets[config.EnvDiscordID] == "" && term.IsTerminal(int(os.Stdin.Fd())) {
-				fmt.Fprint(os.Stderr, "Discord user ID of the EchoVRCE host account: ")
-				var id string
-				fmt.Scanln(&id)
-				a.Secrets[config.EnvDiscordID] = strings.TrimSpace(id)
-			}
-			if noPassword {
-				delete(a.Secrets, config.EnvPassword)
 				if err := a.Secrets.Save(a.Dir); err != nil {
 					return err
 				}
-				if !a.DeviceLinked() {
-					g.say("saved without a password; now link this host: evr-ptero account link")
-					return nil
+			}
+			if noPassword {
+				return link(cmd, a)
+			}
+			id, pw := discordID, ""
+			if gameDir != "" {
+				oldID, oldPW, key := legacyCredentials(gameDir)
+				if oldID == "" {
+					return fmt.Errorf("no credentials found in %s/_local", gameDir)
 				}
-			} else if passwordStdin || a.Secrets[config.EnvPassword] == "" {
-				p, err := readSecret("EchoVRCE server password: ")
-				if err != nil {
+				if id == "" {
+					id = oldID
+				}
+				pw = oldPW
+				if key != "" && httpKey == "" {
+					a.Secrets[config.EnvHTTPKey] = key
+				}
+			}
+			if id == "" {
+				id = a.Secrets[config.EnvDiscordID]
+			}
+			// Ask for what is still missing when someone is at the terminal.
+			if id == "" && term.IsTerminal(int(os.Stdin.Fd())) {
+				fmt.Fprint(os.Stderr, "Discord user ID of the EchoVRCE host account: ")
+				fmt.Scanln(&id)
+				id = strings.TrimSpace(id)
+			}
+			if id == "" {
+				return errors.New("--discord-id is required")
+			}
+			if passwordStdin || pw == "" {
+				if pw, err = readSecret("EchoVRCE server password: "); err != nil {
 					return err
 				}
-				a.Secrets[config.EnvPassword] = p
 			}
-			s, err := a.Login(cmd.Context())
-			if err != nil {
-				return err
-			}
-			if err := a.Secrets.Save(a.Dir); err != nil {
-				return err
-			}
-			g.say("saved; signed in as %s, %s", s.Username, s.HostSummary())
-			if !applyAll {
-				return nil
-			}
-			list, err := a.Servers(cmd.Context())
-			if err != nil {
-				return err
-			}
-			for _, sv := range list {
-				if err := a.UpdateServer(cmd.Context(), sv, func(*instance.Settings) {}, true); err != nil {
-					return fmt.Errorf("%s: %w", sv.Name(), err)
-				}
-				g.say("%s: updated", sv.Name())
-			}
-			return nil
+			_, err = a.UsePassword(cmd.Context(), id, pw, func(s string) { g.say("%s", s) })
+			return err
 		},
 	}
 	set.Flags().StringVar(&discordID, "discord-id", "", "Discord user ID")
 	set.Flags().StringVar(&httpKey, "http-key", "", "backend HTTP key (default: the public key nevr-runtime embeds)")
 	set.Flags().BoolVar(&passwordStdin, "password-stdin", false, "read the password from stdin")
-	set.Flags().BoolVar(&noPassword, "no-password", false, "no password: sign in with a device link instead (evr-ptero account link)")
+	set.Flags().BoolVar(&noPassword, "no-password", false, "no password: link this host at echovrce.com/device instead (same as account link)")
 	set.Flags().StringVar(&gameDir, "from-game-dir", "", "take the account from an old game directory's _local/config.yaml or config.json")
-	set.Flags().BoolVar(&applyAll, "apply", false, "also update every Echo VR server with it")
+	set.Flags().BoolVar(&applyAll, "apply", false, "")
+	_ = set.Flags().MarkDeprecated("apply", "every server is always updated now")
 	cmd.AddCommand(set)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "link",
 		Short: "Link this host at echovrce.com/device (sign in without a password)",
-		Long: `Shows a short code to approve at echovrce.com/device and stores the resulting
-refresh token in /etc/evr-ptero/device.json, and takes the Discord ID from the
-backend account. New servers get the link in their _local/.credentials.json.
-No password or key has to be entered.`,
+		Long: `Shows a short code to approve at echovrce.com/device, stores the resulting
+refresh token in /etc/evr-ptero/device.json and takes the Discord ID from the
+backend account. A stored password is removed, and every server gets the link
+in its _local/.credentials.json (running ones restart).`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := g.app()
 			if err != nil {
 				return err
 			}
-			g.say("%s\n", core.ResetPasswordNote)
-			s, err := a.LinkDevice(cmd.Context(), func(url, code string, expires time.Time) {
-				g.say("Open %s and approve the code %s (valid until %s).", url, code, expires.Local().Format(time.TimeOnly))
-			})
-			if err != nil {
-				return err
-			}
-			g.say("Linked as %s (Discord ID %s); %s.", s.Username, a.Secrets[config.EnvDiscordID], s.HostSummary())
-			return nil
+			return link(cmd, a)
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
