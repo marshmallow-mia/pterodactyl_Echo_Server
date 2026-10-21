@@ -616,7 +616,7 @@ func (m *Model) renderAccount() string {
 	case a.err != nil:
 		b.WriteString(ui.Error.Render(a.err.Error()) + "\n")
 	default:
-		fmt.Fprintf(&b, "Signed in as %s\n\nCan host for %d guild(s):\n", ui.Bold.Render(a.session.Username), len(a.session.HostGuilds()))
+		fmt.Fprintf(&b, "Signed in as %s; %s\n\n", ui.Bold.Render(a.session.Username), a.session.HostSummary())
 		for _, g := range a.session.HostGuilds() {
 			b.WriteString("  " + g + "\n")
 		}
