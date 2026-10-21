@@ -30,6 +30,13 @@ func required(what string) func(string) error {
 	}
 }
 
+func orDefault(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
+}
+
 func digits(s string) error {
 	if s == "" || strings.Trim(s, "0123456789") != "" {
 		return errors.New("digits only")
@@ -86,8 +93,14 @@ type account struct{ discordID, password, httpKey string }
 
 func accountGroup(a *account) *huh.Group {
 	return huh.NewGroup(
-		huh.NewInput().Title("Discord user ID").Description("The EchoVRCE account that hosts the servers.").Value(&a.discordID).Validate(digits),
-		huh.NewInput().Title("Server password (optional)").Description("Leave empty to link this host at echovrce.com/device instead, right after setup.\n"+core.ResetPasswordNote).EchoMode(huh.EchoModePassword).Value(&a.password),
+		huh.NewNote().Title("EchoVRCE sign-in").Description("Leave the password empty to sign in at echovrce.com/device right after setup; the Discord ID is then filled in for you.\n"+core.ResetPasswordNote),
+		huh.NewInput().Title("Server password (optional)").EchoMode(huh.EchoModePassword).Value(&a.password),
+		huh.NewInput().Title("Discord user ID").Description("Only needed with a password: the EchoVRCE account that hosts the servers.").Value(&a.discordID).Validate(func(s string) error {
+			if s == "" && a.password == "" {
+				return nil
+			}
+			return digits(s)
+		}),
 	).Title("EchoVRCE host account")
 }
 
@@ -130,15 +143,29 @@ func installForm(m *Model) tea.Cmd {
 				huh.NewOption("I have a certificate", "existing"),
 				huh.NewOption("No TLS (testing only)", "none"),
 			).Value(&o.TLS),
-			huh.NewInput().Title("Wings domain (reverse proxy only)").Description("A second proxy hostname that forwards plain http to port 443 of this host, auth off.").Value(&o.WingsFQDN),
-			huh.NewInput().Title("Certificate and key files").Description("Only for 'I have a certificate': /path/fullchain.pem,/path/privkey.pem").Value(&o.CertFile),
 		).Title("Install a panel"),
 		huh.NewGroup(
+			huh.NewNote().Title("Reverse proxy").DescriptionFunc(func() string {
+				return fmt.Sprintf("Set up two resources in your proxy, both forwarding plain http to this host:\n"+
+					"  %s → http://<this host>:<HTTP port below> (the panel)\n"+
+					"  Wings domain → http://<this host>:443 (Wings, no proxy login in front of it)", orDefault(o.FQDN, "panel domain"))
+			}, &o.FQDN),
+			huh.NewInput().Title("Wings domain").Description("A second hostname on your proxy for Wings (console and file access).").Value(&o.WingsFQDN).Validate(required("the Wings domain")),
+		).WithHideFunc(func() bool { return o.TLS != "proxy" }),
+		huh.NewGroup(
+			huh.NewInput().Title("Certificate file").Description("Full chain, e.g. /etc/ssl/panel/fullchain.pem").Value(&o.CertFile).Validate(required("the certificate")),
+			huh.NewInput().Title("Key file").Value(&o.KeyFile).Validate(required("the key")),
+		).WithHideFunc(func() bool { return o.TLS != "existing" }),
+		huh.NewGroup(
 			huh.NewNote().Title("Ports").Description("Behind a NAT that maps external ports to different internal ones, enter the internal ports.\n"+
-				"The Wings port and game ports must be forwarded 1:1."),
+				"Game ports must be forwarded 1:1."),
 			huh.NewInput().Title("HTTP port (internal)").Value(&httpPort).Validate(intRange(1, 65535)),
+		),
+		huh.NewGroup(
 			huh.NewInput().Title("HTTPS ports (internal, comma-separated)").Description("Add 443 next to a NAT port so the host can reach itself by name.").Value(&httpsPorts),
-			huh.NewInput().Title("Wings port").Value(&wingsPort).Validate(intRange(1, 65535)),
+			huh.NewInput().Title("Wings port").Description("Must be forwarded 1:1.").Value(&wingsPort).Validate(intRange(1, 65535)),
+		).WithHideFunc(func() bool { return o.TLS == "proxy" }),
+		huh.NewGroup(
 			huh.NewInput().Title("Game ports to allocate from 6792").Value(&ports).Validate(intRange(1, 200)),
 			huh.NewInput().Title("Public IP (optional)").Description("Shown as allocation alias.").Value(&alias),
 		),
@@ -151,9 +178,6 @@ func installForm(m *Model) tea.Cmd {
 			o.Channel = "beta"
 		case "pelican":
 			o.Product = "pelican"
-		}
-		if o.TLS == "existing" {
-			o.CertFile, o.KeyFile, _ = strings.Cut(o.CertFile, ",")
 		}
 		o.HTTPPort, _ = strconv.Atoi(httpPort)
 		o.WingsPort, _ = strconv.Atoi(wingsPort)
