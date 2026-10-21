@@ -5,6 +5,8 @@ Run Echo VR dedicated servers with [nevr-runtime](https://github.com/EchoTools/n
 the panel and Wings for you, or prepare a panel you already run, or just give you the egg. After that it manages the
 servers from a dashboard in the terminal or with plain commands. You can also manage the servers in the panel.
 
+![The evr-ptero dashboard with three servers](docs/images/ptero-dashboard.svg)
+
 > No panel wanted? See [Echo-VR-Server-on-Docker](https://github.com/marshmallow-mia/Echo-VR-Server-on-Docker).
 > It uses the same image and runtime handling.
 
@@ -30,6 +32,8 @@ pre-release while there is no stable one; `EVR_VERSION=v2.0.0` picks one) and op
 - **Use an existing panel.** On the panel host itself, the API keys are created for you. For a panel elsewhere, paste
   an application API key, plus an admin account key so `evr-ptero` can start servers and show their console.
 - **Only write the egg files** to import by hand (see [Doing it yourself](#doing-it-yourself)).
+
+![The wizard installing a panel](docs/images/ptero-install.svg)
 
 Then you choose how the servers sign in to EchoVRCE: a device link at echovrce.com/device (no password; you approve a
 code and the Discord ID is filled in from your account), or your Discord ID and server password. If the link does not
@@ -98,9 +102,11 @@ version, and how many matches and restarts it has had.
 | `i` | reinstall a server (runs the egg's install step again) |
 | `U` | updates of evr-ptero, the game files, nevr-runtime, the panel and Wings: install, pick a version, settings |
 | `c` | account: sign-in state and registered servers; `l` links this host at echovrce.com/device, `p` signs in with a password |
-| `m` | more: runtime versions and updates, Discord alerts and the background service, updates, moving servers from an old Echo egg, the panel connection, the panel admin login (show it, set or generate a new password), re-running the setup, the egg files, uninstalling the panel |
+| `m` | more: updates, runtime versions, Discord alerts and the background service, moving servers from an old Echo egg, the panel connection, the panel admin login (show it, set or generate a new password), re-running the setup, the egg files, uninstalling the panel |
 
 A running device link can be cancelled with `esc`, and a failed one retried with `l`.
+
+![The m menu](docs/images/ptero-more.svg)
 
 ## Commands
 
@@ -139,6 +145,8 @@ Without `--password-stdin` the setup ends with the device link and prints the co
 (`--no-link` skips it).
 
 ## Updates
+
+![The updates screen](docs/images/ptero-updates.svg)
 
 `U` in the dashboard lists every part with the installed and the available version. `enter` updates one (you can pick
 the version), `c` checks again, `s` sets how each part is updated:
