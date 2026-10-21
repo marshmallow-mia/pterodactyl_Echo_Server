@@ -238,7 +238,7 @@ const DeviceFile = "device.json"
 // the password is optional.
 func (s Secrets) MissingAccount(deviceLinked bool) []string {
 	var out []string
-	for _, k := range []string{config.EnvDiscordID, config.EnvPassword, config.EnvHTTPKey} {
+	for _, k := range []string{config.EnvDiscordID, config.EnvPassword} {
 		if s[k] == "" && !(k == config.EnvPassword && deviceLinked) {
 			out = append(out, k)
 		}

@@ -11,7 +11,7 @@
     "docker_images": {
         "Echo VR nevr": "ghcr.io/marshmallow-mia/echovr-pterodactyl:2"
     },
-    "exported_at": "2026-10-21T13:45:31Z",
+    "exported_at": "2026-10-21T13:57:51Z",
     "features": null,
     "file_denylist": [],
     "meta": {
@@ -50,12 +50,12 @@
         },
         {
             "name": "Backend HTTP key",
-            "description": "http_key for the EchoVRCE backend (g.echovrce.com:7350).",
+            "description": "http_key for the EchoVRCE backend. Empty uses the public key nevr-runtime embeds.",
             "env_variable": "NEVR_HTTP_KEY",
             "default_value": "",
             "user_viewable": false,
             "user_editable": false,
-            "rules": "required|string|max:200",
+            "rules": "nullable|string|max:200",
             "field_type": "text"
         },
         {
