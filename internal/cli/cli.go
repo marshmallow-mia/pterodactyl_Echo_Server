@@ -505,7 +505,7 @@ func accountCmd(g *globals) *cobra.Command {
 			if err := a.Secrets.Save(a.Dir); err != nil {
 				return err
 			}
-			g.say("saved; signed in as %s, host role in %d guild(s)", s.Username, len(s.HostGuilds()))
+			g.say("saved; signed in as %s, %s", s.Username, s.HostSummary())
 			if !applyAll {
 				return nil
 			}
@@ -547,7 +547,7 @@ No password or key has to be entered.`,
 			if err != nil {
 				return err
 			}
-			g.say("Linked as %s (Discord ID %s); host role in %d guild(s).", s.Username, a.Secrets[config.EnvDiscordID], len(s.HostGuilds()))
+			g.say("Linked as %s (Discord ID %s); %s.", s.Username, a.Secrets[config.EnvDiscordID], s.HostSummary())
 			return nil
 		},
 	})
@@ -563,7 +563,7 @@ No password or key has to be entered.`,
 				return err
 			}
 			return g.print(map[string]any{"username": s.Username, "host_guilds": s.HostGuilds()}, func(w io.Writer) {
-				fmt.Fprintf(w, "Signed in as %s; host role in %d guild(s)\n", s.Username, len(s.HostGuilds()))
+				fmt.Fprintf(w, "Signed in as %s; %s\n", s.Username, s.HostSummary())
 				for _, gid := range s.HostGuilds() {
 					fmt.Fprintln(w, "  "+gid)
 				}

@@ -104,7 +104,7 @@ func linkIfNoPassword(ctx context.Context, app *core.App, a *account, say func(s
 	if err != nil {
 		return err
 	}
-	say(fmt.Sprintf("Linked as %s; host role in %d guild(s)", s.Username, len(s.HostGuilds())))
+	say(fmt.Sprintf("Linked as %s; %s", s.Username, s.HostSummary()))
 	return nil
 }
 
