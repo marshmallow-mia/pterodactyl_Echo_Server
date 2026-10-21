@@ -1,260 +1,237 @@
-# Echo Server in Pterodactyl
+# Echo VR Server on Pterodactyl and Pelican
 
-This Guide will help you set up Echo Servers on Linux with Pterodactyl with error handling.
-![image](https://github.com/user-attachments/assets/983bed6e-7714-44a2-96be-1517073eeabe)
+Run Echo VR dedicated servers with [nevr-runtime](https://github.com/EchoTools/nevr-runtime) on
+[Pterodactyl](https://pterodactyl.io) or [Pelican](https://pelican.dev). `evr-ptero` sets everything up: it can install
+the panel and Wings for you, or prepare a panel you already run, or just give you the egg. After that it manages the
+servers from a dashboard in the terminal or with plain commands. You can also manage the servers in the panel.
 
-Please use the same paths as I do in this guide. If you dont, stuff might now work as expected.
+> No panel wanted? See [Echo-VR-Server-on-Docker](https://github.com/marshmallow-mia/Echo-VR-Server-on-Docker).
+> It uses the same image and runtime handling.
 
-You also should have a Domain for the Pterodactyl Dashboard to be able to use SSL/https.
-You might be able to do it without, but this Guide will work with a Domain.
+## Quick start
 
+On a Debian 12 or 13 host (a VM, or a Proxmox LXC with `nesting=1,keyctl=1`):
 
-I use Debian 12 x86. Other systems should work, but in this Guide I will only show how to get it to run on Debian 12.
-
-For some of the steps, you have to follow the official Guide.
-It doesnt make sense for me to just repeat everything here.
-I will provide some additional imformations for some of the steps if needed. So check below for that.
-
-This is the Guide I will work with. Just follow the steps below and I will tell you whenever you have to reference the guide.
-```
-https://pterodactyl.io/panel/1.0/getting_started.html
+```sh
+curl -fsSL https://raw.githubusercontent.com/marshmallow-mia/pterodactyl_Echo_Server/main/install.sh | sudo sh
 ```
 
-Before you start you should update your system
-```
-apt update && apt upgrade -y
-```
+The installer downloads a checksum-verified `evr-ptero` binary of the newest release to `/usr/local/bin` (a
+pre-release while there is no stable one; `EVR_VERSION=v2.0.0` picks one) and opens the setup wizard. Choose one of:
 
-# Install Docker:
-```
-https://docs.docker.com/engine/install/debian/
-```
+- **Install a panel with Wings on this host.** Pick Pterodactyl 1.15 (stable), Pterodactyl 2.0 (beta) or Pelican 1.0
+  (release candidate), then answer a few questions: the domain, your admin email and password (or leave it empty to have one generated),
+  how HTTPS is handled, and the ports.
+  For HTTPS you can choose:
+  - a Let's Encrypt certificate (port 80 must reach this host);
+  - a reverse proxy that already handles HTTPS, such as Pangolin or Traefik;
+  - a certificate you already have;
+  - none, for testing.
+- **Use an existing panel.** On the panel host itself, the API keys are created for you. For a panel elsewhere, paste
+  an application API key, plus an admin account key so `evr-ptero` can start servers and show their console.
+- **Only write the egg files** to import by hand (see [Doing it yourself](#doing-it-yourself)).
 
-# Dependencies Install:
+Then you choose how the servers sign in to EchoVRCE: a device link at echovrce.com/device (no password; you approve a
+code and the Discord ID is filled in from your account), or your Discord ID and server password. If the link does not
+complete, press `l` to try again, or later `c` → `l` in the dashboard.
 
-We need to install the dependencies now. The official Guide works with Ubuntu, so I provide you how to set it up on Debian.
-Please check the php Version on the official Guide! 
+`evr-ptero` then installs everything the panel needs for Echo VR:
 
-```
-apt install -y curl gnupg lsb-release apt-transport-https ca-certificates
-wget -qO - https://packages.sury.org/php/apt.gpg | sudo gpg --dearmor -o /usr/share/keyrings/sury-php.gpg
-echo "deb [signed-by=/usr/share/keyrings/sury-php.gpg] https://packages.sury.org/php bookworm main" | sudo tee /etc/apt/sources.list.d/sury-php.list
-apt update
-curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash
-apt update
-#Check for the right php version on the official Guide!
-sudo apt install -y php8.3 php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,fpm,curl,zip} mariadb-server nginx tar unzip git redis-server bc
-curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
+- the game files and nevr-runtime, once per node;
+- the egg;
+- two read-only mounts;
+- the game port allocations.
 
+At the end the dashboard opens: press `a` to add servers. Run `sudo evr-ptero` again at any time to open it.
 
-```
-Please continue on the "Download Files" Section of the official Guide and **come back for the "Webserver Configuration" Section!** 
-For the Application URL when setting up "php artisan p:environment:setup", you should use a Domain with https. You dont have to, but you really should. If you only have a IP, use http://IP
+### Behind a reverse proxy (Pangolin, Traefik, …)
 
-I didnt set up "php artisan p:environment:mail", as I dont need it.
+Choose "Behind a reverse proxy" in the wizard. You need two proxy resources, both forwarding plain http to this host:
 
-# Webserver Configuration
+| Hostname | Target | Proxy login |
+|---|---|---|
+| panel domain, e.g. `panel.example.org` | `http://<host>:80` | allowed |
+| Wings domain, e.g. `wings.example.org` | `http://<host>:443` | **off**: the browser opens the console and file manager directly |
 
-If you dont have a Domain, you cant use SSL. So just follow the official Webserver Configuration Section without doing the steps here.
+### Behind NAT
 
-- Setup your DNS Server and add a subdomain that is pointing to your servers IP.
-  As an example: dash.example.com
-```
-apt install -y certbot
-systemctl stop nginx
-certbot certonly
-```
-- Select 1: Spin up a temporary webserver (standalone)
-- Enter your details
-```
-systemctl start nginx
+Enter the internal ports in the wizard. The game ports (UDP, from 6792) must be forwarded 1:1, with the same number
+outside and inside. The backend registers a server at the address it connects from and the port the game bound, so a
+forward to a different port number points players at the wrong place.
+
+## How it works
 
 ```
-
-- Now continue with the "Webserver Configuration" Section of the official Guide.
-
-- If you start the "Installing Wings" Section, you dont need to install Docker! We did that already.
-
-Also some Stuff for the "Installing Wings/Configure" Section of the official Guide:
-- It will ask you to create a Location at some point. Do that and click sgain on Nodes -> Create New
-- For Total Memory, Memory Over-Allocation, Total Disk Space, Disk Over-Allocation I entered 8000/100%. But less or more should work fine.
-- For the Allocation, enter your Servers IP-Address and enter Ports: 6792-6802. This will give you 10 possible Server instances. Dont forget to click Submit!
-- Dont forget the Auto-Deploy!!!
-  
-  <img width="564" height="302" alt="image" src="https://github.com/user-attachments/assets/e4ece97a-9cab-47b1-b519-f45d36eb3379" />
-
-
-**Now we are done with the basic Pterodactyl Installation**
-
-# Clone this Repo:
-```
-cd /opt
-git clone https://github.com/BL00DY-C0D3/pterodactyl_Echo_Server.git
-cd pterodactyl_Echo_Server
+/srv/echovr/                    on the node, shared by all servers
+  game/34.4.631547.1/           the game, verified
+  game/current → …
+  nevr/v5.4.2/                  nevr-runtime (BugSplat64.dll), checksum-verified
+  nevr/current → v5.4.2         switched by updates; servers follow at their next match
+/etc/evr-ptero/config.yaml      panel connection and server defaults
+/etc/evr-ptero/secrets.env      API keys and the account (mode 0600)
 ```
 
-# Run the getBinaries.sh to get the Echo Binaries
-If you choose different ports then the defaults 6792-6802, add the following to /opt/pterodactyl_Echo_Server/files/exclude.list **AFTER YOU STARTED THE SCRIPT BELOW ONCE**
+- **The egg** runs the image `ghcr.io/marshmallow-mia/echovr-pterodactyl`. The image is
+  [the Docker product's](https://github.com/marshmallow-mia/Echo-VR-Server-on-Docker) Wine image plus the Wings entrypoint.
+  The egg's variables are the server's settings: Discord ID, password, regions, guilds, tick rate and runtime version.
+- **Two read-only mounts** give every server the same game copy (`/opt/echovr/game`) and runtimes (`/opt/echovr/nevr`),
+  so a new server needs no 5 GB download. `evr-ptero` also adds the paths to Wings' `allowed_mounts`. Servers that
+  cannot use mounts can set `GAME_SOURCE=download` and get their own copy.
+- **`evr-supervisor`** runs inside each server and handles the runtime's quirks:
+  - It writes the runtime config and the port. nevr-runtime 5.4.2 ignores `-port`, so the port goes into a per-server
+    `netconfig_dedicatedserver.json`.
+  - It restarts the game after every match, because the runtime exits when a match ends.
+  - It detects rejected logins, unreachable ports and stuck registrations.
+  - It handles the runtime's shutdown hang, so a stop in the panel takes a few seconds.
+  - It prints `[evr] READY` once the server is registered, which the panel shows as Running.
+
+## Dashboard
+
+`sudo evr-ptero` shows every Echo VR server of the panel with its state, the address it registered as, its runtime
+version, and how many matches and restarts it has had.
+
+| Key | Action |
+|---|---|
+| `enter` | live console from the panel (`f` follow, `a` show runtime noise, `/` filter) |
+| `s` / `x` / `r` / `K` | start / stop / restart / kill |
+| `a` / `e` / `d` | add servers / edit one (regions, guilds, tick rate, empty TTL, runtime pin) / delete |
+| `i` | reinstall a server (runs the egg's install step again) |
+| `U` | updates of evr-ptero, the game files, nevr-runtime, the panel and Wings: install, pick a version, settings |
+| `c` | account: sign-in state and registered servers; `l` links this host at echovrce.com/device, `p` signs in with a password |
+| `m` | more: runtime versions and updates, Discord alerts and the background service, updates, moving servers from an old Echo egg, the panel connection, the panel admin login (show it, set or generate a new password), re-running the setup, the egg files, uninstalling the panel |
+
+A running device link can be cancelled with `esc`, and a failed one retried with `l`.
+
+## Commands
+
+Everything in the dashboard is also a command, and every command is also in the dashboard. Add `--json` for scripts and
+`-y` to skip confirmations.
 
 ```
-netconfig*
-```
-Run
-```
-bash getBinaries.sh
-```
-
-# Configure Echo configs
-
-- config.json:
-```
-nano /opt/ready-at-dawn-echo-arena/_local/config.json
-```
-
-This is an example config.json. If you dont know what to enter here, contact your Matchmaking Admin!
-```
-{
-    "apiservice_host":  "http://g.example.com:80/api",
-    "configservice_host":  "ws://g.example.com:80/config",
-    "loginservice_host":  "ws://g.example.com:80/login?discordid=<YOUR DISCORD ID>&password=<YOUR PASSWORD>",
-    "matchingservice_host":  "ws://g.example.com:80/matching",
-    "serverdb_host":  "ws://g.example.com:80/serverdb?discordid=<YOUR DISCORD ID>&password=<YOUR PASSWORD>&regions=default,<YOUR REGION CODE>",
-    "transactionservice_host":  "ws://g.example.com:80/transaction",
-    "publisher_lock":  "echovrce"
-}
-```
-Type CTRL+X, then y, then Enter to save
-
-- start-echo.sh:
-```
-nano ./scripts/start-echo.sh 
+evr-ptero init                          guided setup; with flags unattended (init --help)
+evr-ptero panel install|setup|info      install a panel here / prepare a panel / show the connection
+evr-ptero panel login [--show-password]  the admin login the installer created
+evr-ptero panel password [--user EMAIL] [--generate | --password-stdin]   change a panel user's password
+evr-ptero panel uninstall [--purge-packages --purge-docker]
+evr-ptero server ls
+evr-ptero server create -n 2 [--regions euw] [--guilds ID,…]
+evr-ptero server edit NAME --tick-rate 90 --regions euw,default
+evr-ptero server start|stop|restart|kill NAME…
+evr-ptero server logs NAME               follow the console
+evr-ptero server reinstall|rm NAME
+evr-ptero account link|set|test|servers  device link (no password) or password sign-in; updates every server
+evr-ptero runtime ls|use TAG|rollback|remove TAG
+evr-ptero update [check|ls|apply|settings]   evr-ptero itself, game files, nevr-runtime, panel, Wings
+evr-ptero agent install|uninstall|run|webhook URL  metrics, Discord alerts, automatic runtime updates
+evr-ptero files install                  game and runtime into a directory
+evr-ptero egg export --format ptdl|plcn  the egg for importing by hand
+evr-ptero migrate detect|run             move servers from the old Echo egg
 ```
 
-Change the region variable to match your region
+Unattended install, for example Pelican behind a reverse proxy:
 
-
-# Open your Pterodactyl dashboard to setup the server
-
-- Go to Nests -> Create New
-  - Enter a name
-  ## Option 1: Import premade egg
-    1. Download https://github.com/marshmallow-mia/pterodactyl_Echo_Server/blob/main/egg-echo.json
-    2. Click "Import Egg"
-      - Egg file: The downloaded JSON file
-      - Associated Nest: The nest you just created
-    3. Save
-   
-  ## Option 2: Manually create egg
-    1. Click on New Egg
-    2. Associated Nest: The Nest you just created
-    3. Name: Enter a name
-    4. Docker Images:
-    ``miarshmallow/echovr`` (You can build and upload (dockerhub) your own Dockerimage with the provided Dockerfile if you want to.)
-    5. Startup Command: ``${MODIFIED_STARTUP}``
-    6. Stop Command: ``^C ^C``
-    7. Configuration Files:
-       ```
-       {
-           "server.properties": {
-               "parser": "properties",
-               "find": {
-                   "server-ip": "0.0.0.0",
-                   "enable-query": "true",
-                   "server-port": "{{server.build.default.port}}",
-                   "query.port": "{{server.build.default.port}}"
-               }
-           }
-       }
-       ```
-    8. Start Configuration:
-        ```
-        {
-          "done": "[NSLOBBY] registration successful"
-        }
-        ```
-    9. Log Configuration: ``{}``
-    10. Save
-
-
-
-# Prepare mounts
-
-- Go back into your Terminal
-
-```
-nano /etc/pterodactyl/config.yml
-```
-- On the allowed_mounts section enter the path like this:
-
-```
-allowed_mounts:
-- /opt/ready-at-dawn-echo-arena
-- /opt/pterodactyl_Echo_Server/scripts
+```sh
+sudo evr-ptero init --mode install --product pelican --fqdn panel.example.org --wings-fqdn wings.example.org \
+    --tls proxy --email you@example.org --ports 10
 ```
 
+Without `--password-stdin` the setup ends with the device link and prints the code to approve, like the wizard
+(`--no-link` skips it).
 
+## Updates
 
+`U` in the dashboard lists every part with the installed and the available version. `enter` updates one (you can pick
+the version), `c` checks again, `s` sets how each part is updated:
 
-# Configure the mounts in your Dashboard
-- Go to Mounts -> Create New
-  - Name: ``ready-at-dawn-echo-arena``
-  - Source: ``/opt/ready-at-dawn-echo-arena``
-  - Target: ``/ready-at-dawn-echo-arena``
-  - Click Create
-  - Eggs: Choose your created Egg (Probably at the bottom of the list)
-  - Nodes: Choose your Node
-  - Click on Save
+| Part | What an update does | Default |
+|---|---|---|
+| `evr-ptero` | downloads the new release, checks it against `checksums.txt`, replaces the binary (the old one stays as `evr-ptero.prev`) and restarts; the egg and the servers move to the image released with it, each server at its next restart | notify |
+| game files | fetches missing or changed files of the node's shared copy from the mirror and verifies the build; servers use them from their next restart. Echo VR no longer changes, so this is a repair | notify |
+| nevr-runtime | installs the version of the runtime channel and tries it on one idle server first; only if that server registers do the others switch, at their next match boundary. A version that fails is skipped | auto |
+| panel | backs up the panel files and database to `/var/backups/evr-ptero` (the last 3 are kept), maintenance mode, the new release, `composer install`, migrations, queue restart. If the panel API does not answer afterwards, the backup is restored | notify |
+| Wings | replaces the binary and restarts Wings; game servers keep running. If Wings does not come back, the old binary is put back | notify |
 
-- Do the same again with different Name, Source, Target
-  - Name: ``scripts``
-  - Source: ``/opt/pterodactyl_Echo_Server/scripts``
-  - Target: ``/scripts``
- 
-- Its probably the best if you reboot your server now (I had problems with the Mounts without rebooting): ``reboot 0``
-
-
-
-# Finally we can create the server instances (Do this for as many servers as you want)
-- Go to Servers -> Create New
-  - Server Name: Enter a Name. (I would include the Port you choose at "Default Allocation" in it. Like Echo_6792)
-  - Server Owner: Enter your previously created user
-  - UNCLICK "Start Server when Installed"
-  - Node: Choose your Node
-  - Default Allocation: Choose a Port
-  - Memory/Disk Space: Enter 0 or whatever you want
-  - CPU Limit/CPU Pinning is a really nice Setting, but you dont really need to set it
-  - Nest : Choose your created Nest
-  - Egg/Docker Image should be set already
-  - Click on Create Server
-  - It will take a minute for the server to be installed. Just wait a minute and reload the page until you have the Mounts Tab
-  - Click on Mounts
-  - Press the + on both configured Mounts
-
-
-
-
-# WE ARE PRETTY MUCH DONE!
-
-
-You can no close out of the Admin Area (the button top right) and click on one of your created servers
-
-- Click start
-  - The first start will probably error out. But you dont have to do anything, as my error-check.sh script will automatically restart.
- 
-# You also should enable the Log Cleanup Script:
-
-Type ``crontab -e``
-Add:
+The panel and Wings appear when they run on this host. Each part is `off`, `notify` (checked; shown in the dashboard
+and sent as a Discord alert) or `auto` (installed by the background service), optionally only inside a time window such
+as `04:00-06:00`. The panel follows its installed channel (Pterodactyl 1.x stable, or 2.x beta); you can pick any newer
+release by hand, and moving to another channel, e.g. 1.x to 2.x, asks you to type the version first, because that
+migration only goes forward. The same with commands:
 
 ```
-*/5 * * * * /usr/bin/bash /opt/pterodactyl_Echo_Server/scripts/move_logs.sh
+evr-ptero update                                   check everything
+evr-ptero update ls self|game|runtime|panel|wings  versions to choose from
+evr-ptero update apply panel [--version V] [--dry-run]
+evr-ptero update settings --panel notify --wings auto --window 04:00-06:00 [--panel-channel beta]
 ```
 
-# Optionally, delete old log files.  In the crontab entry below, replace 30 with the number of days you want to keep older logs:
+Mods will be one more part here.
 
-Type ``crontab -e``
-Add:
+## Alerts and metrics
 
+A small background service on the node (dashboard: `m` → Discord alerts and the background service, or
+`sudo evr-ptero agent install`) runs the update checks above, and:
+
+- **Discord alerts.** Enter a webhook URL in the same dashboard form (or `evr-ptero agent webhook https://discord.com/api/webhooks/…`)
+  and a test message is sent. You then get
+  alerts when a server stops on an error, keeps restarting, stays down or recovers, and when an update is available,
+  installed or fails.
+- **Prometheus metrics** on `127.0.0.1:9470/metrics`.
+
+## Doing it yourself
+
+`evr-ptero` is not needed at run time; the egg and the image work on their own.
+
+1. Import the egg from the [release](https://github.com/marshmallow-mia/pterodactyl_Echo_Server/releases) matching your
+   panel: `egg-echovr-nevr.json` for Pterodactyl (Admin → Nests → Import Egg) or `egg-echovr-nevr.yaml` for Pelican
+   (Eggs → Import).
+2. Either create servers with `GAME_SOURCE=download`, which gives each server its own copy of the game, or share one
+   copy:
+   - Put the game in `/srv/echovr/game/current` and nevr-runtime in `/srv/echovr/nevr/current/BugSplat64.dll`
+     (`evr-ptero files install --dir /srv/echovr` does both).
+   - Add the paths to `allowed_mounts` in the Wings config.
+   - Create two read-only mounts, `/srv/echovr/game` → `/opt/echovr/game` and `/srv/echovr/nevr` → `/opt/echovr/nevr`,
+     for the egg and the node.
+3. Give each server one allocation in the game port range and fill in the egg variables.
+
+## Moving from v1
+
+The old guide and egg are kept on the [`v1`](https://github.com/marshmallow-mia/pterodactyl_Echo_Server/tree/v1) branch.
+On the panel host, run `sudo evr-ptero`, connect to the panel and sign in, then `m` → Move servers from an old Echo egg
+and pick the servers. The same with commands:
+
+```sh
+sudo evr-ptero init                 # connect to the panel, sign in
+sudo evr-ptero migrate detect
+sudo evr-ptero migrate run
 ```
-5 11 * * * find /opt/ready-at-dawn-echo-arena/logs/archive -type f -mtime +30 -delete
+
+`migrate run` switches each old server to the new egg and image, keeping its allocation, owner and limits. It gives the
+server the account from the setup and the shared game files, and restarts it. The old egg and game folders are left alone; delete them once everything works.
+
+## Troubleshooting
+
+- A server that stays at "starting" in the dashboard shows the reason in its console. Common ones:
+  - `bad_credentials`: the backend rejected the Discord ID or password.
+  - `udp_unreachable`: the backend could not reach the game port; check the 1:1 port forward.
+  - `registration_rejected`: the server did not register in time.
+- Under Proxmox LXC, Docker needs `nesting=1,keyctl=1`.
+- Can't log in to the panel? `m` → Panel admin login and password (or `sudo evr-ptero panel login --show-password`)
+  shows the admin login; set a new password there or with `evr-ptero panel password`. "Forgot password" in the panel
+  needs mail, which the installer does not set up.
+- The panel installer resumes where it stopped: run the same command (or the wizard) again after fixing the cause.
+
+## Building
+
+```sh
+go test ./...
+go build ./cmd/evr-ptero
+docker build -f image/Dockerfile -t echovr-pterodactyl:dev .
 ```
+
+The shared packages (game files, runtime releases, `config.yaml`, the EchoVRCE account API, the supervisor, status,
+metrics, alerts, updates) come from the Docker repo's `pkg/`.
+
+## License
+
+GNU General Public License v3.0. Echo VR is property of Meta / Ready At Dawn and is not included; nevr-runtime is
+Apache-2.0 by EchoTools.
