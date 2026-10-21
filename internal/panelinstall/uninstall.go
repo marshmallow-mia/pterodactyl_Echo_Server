@@ -58,6 +58,7 @@ rm -rf /etc/nginx /var/lib/mysql /etc/mysql /etc/php /var/lib/php /etc/redis /va
 pk=$(dpkg-query -W -f='${Package}\n' | grep -E '^(docker-|containerd)' | tr '\n' ' ')
 [ -z "$pk" ] || apt-get purge -y -qq $pk >/dev/null
 rm -rf /var/lib/docker /var/lib/containerd /etc/docker /etc/apt/sources.list.d/docker.list
+ip link delete docker0 2>/dev/null || true
 `+staleBridges)
 		}})
 	}
