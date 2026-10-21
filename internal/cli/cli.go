@@ -451,7 +451,7 @@ func dash(s string) string {
 func accountCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{Use: "account", Short: "EchoVRCE host account"}
 	var discordID, httpKey, gameDir string
-	var passwordStdin, applyAll bool
+	var passwordStdin, applyAll, noPassword bool
 	set := &cobra.Command{
 		Use: "set", Short: "Store the account (and with --apply update every server)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -489,7 +489,16 @@ func accountCmd(g *globals) *cobra.Command {
 				}
 				a.Secrets[config.EnvHTTPKey] = k
 			}
-			if passwordStdin || a.Secrets[config.EnvPassword] == "" {
+			if noPassword {
+				delete(a.Secrets, config.EnvPassword)
+				if err := a.Secrets.Save(a.Dir); err != nil {
+					return err
+				}
+				if !a.DeviceLinked() {
+					g.say("saved without a password; now link this host: evr-ptero account link")
+					return nil
+				}
+			} else if passwordStdin || a.Secrets[config.EnvPassword] == "" {
 				p, err := readSecret("EchoVRCE server password: ")
 				if err != nil {
 					return err
@@ -523,9 +532,31 @@ func accountCmd(g *globals) *cobra.Command {
 	set.Flags().StringVar(&discordID, "discord-id", "", "Discord user ID")
 	set.Flags().StringVar(&httpKey, "http-key", "", "backend HTTP key")
 	set.Flags().BoolVar(&passwordStdin, "password-stdin", false, "read the password from stdin")
+	set.Flags().BoolVar(&noPassword, "no-password", false, "no password: sign in with a device link instead (evr-ptero account link)")
 	set.Flags().StringVar(&gameDir, "from-game-dir", "", "take the account from an old game directory's _local/config.yaml or config.json")
 	set.Flags().BoolVar(&applyAll, "apply", false, "also update every Echo VR server with it")
 	cmd.AddCommand(set)
+	cmd.AddCommand(&cobra.Command{
+		Use:   "link",
+		Short: "Link this host at echovrce.com/device (sign in without a password)",
+		Long: `Shows a short code to approve at echovrce.com/device and stores the resulting
+refresh token in /etc/evr-ptero/device.json. New servers get it in their
+_local/.credentials.json. The Discord ID and HTTP key still come from "account set".`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			a, err := g.app()
+			if err != nil {
+				return err
+			}
+			s, err := a.LinkDevice(cmd.Context(), func(url, code string, expires time.Time) {
+				g.say("Open %s and approve the code %s (valid until %s).", url, code, expires.Local().Format(time.TimeOnly))
+			})
+			if err != nil {
+				return err
+			}
+			g.say("Linked as %s; host role in %d guild(s).", s.Username, len(s.HostGuilds()))
+			return nil
+		},
+	})
 	cmd.AddCommand(&cobra.Command{
 		Use: "test", Short: "Sign in and list hostable guilds",
 		RunE: func(cmd *cobra.Command, _ []string) error {

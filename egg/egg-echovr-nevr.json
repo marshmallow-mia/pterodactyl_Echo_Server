@@ -11,7 +11,7 @@
     "docker_images": {
         "Echo VR nevr": "ghcr.io/marshmallow-mia/echovr-pterodactyl:2"
     },
-    "exported_at": "2026-10-21T09:33:32Z",
+    "exported_at": "2026-10-21T13:45:31Z",
     "features": null,
     "file_denylist": [],
     "meta": {
@@ -40,12 +40,12 @@
         },
         {
             "name": "Server password",
-            "description": "Password of the EchoVRCE host account. Only admins can see or change it.",
+            "description": "Password of the EchoVRCE host account. Only admins can see or change it. Leave empty when the node uses a device link (evr-ptero account link).",
             "env_variable": "NEVR_PASSWORD",
             "default_value": "",
             "user_viewable": false,
             "user_editable": false,
-            "rules": "required|string|max:200",
+            "rules": "nullable|string|max:200",
             "field_type": "text"
         },
         {

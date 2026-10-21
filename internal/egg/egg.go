@@ -37,7 +37,7 @@ type Spec struct {
 func Variables() []Variable {
 	return []Variable{
 		{"Discord ID", "Discord user ID of the EchoVRCE host account.", "NEVR_DISCORD_ID", "", false, false, []string{"required", "string", "regex:/^[0-9]{5,25}$/"}},
-		{"Server password", "Password of the EchoVRCE host account. Only admins can see or change it.", "NEVR_PASSWORD", "", false, false, []string{"required", "string", "max:200"}},
+		{"Server password", "Password of the EchoVRCE host account. Only admins can see or change it. Leave empty when the node uses a device link (evr-ptero account link).", "NEVR_PASSWORD", "", false, false, []string{"nullable", "string", "max:200"}},
 		{"Backend HTTP key", "http_key for the EchoVRCE backend (g.echovrce.com:7350).", "NEVR_HTTP_KEY", "", false, false, []string{"required", "string", "max:200"}},
 		{"Regions", "Comma-separated regions this server offers itself for, e.g. euw. Empty uses the backend's default.", "NEVR_REGIONS", "", true, true, []string{"nullable", "string", "max:200", "regex:/^[A-Za-z0-9_,-]*$/"}},
 		{"Guilds", "Comma-separated guild IDs to host for. Empty hosts for every guild the account may host.", "NEVR_GUILDS", "", false, false, []string{"nullable", "string", "max:2000"}},

@@ -231,11 +231,15 @@ func (s Secrets) Save(dir string) error {
 	return writeAtomic(filepath.Join(dir, "secrets.env"), []byte(b.String()), 0o600)
 }
 
-// MissingAccount lists missing EchoVRCE account secrets.
-func (s Secrets) MissingAccount() []string {
+// DeviceFile holds the echovrce.com device link (refresh token), 0600.
+const DeviceFile = "device.json"
+
+// MissingAccount lists missing EchoVRCE account secrets. With a device link
+// the password is optional.
+func (s Secrets) MissingAccount(deviceLinked bool) []string {
 	var out []string
 	for _, k := range []string{config.EnvDiscordID, config.EnvPassword, config.EnvHTTPKey} {
-		if s[k] == "" {
+		if s[k] == "" && !(k == config.EnvPassword && deviceLinked) {
 			out = append(out, k)
 		}
 	}
