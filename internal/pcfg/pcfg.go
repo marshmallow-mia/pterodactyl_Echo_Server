@@ -63,7 +63,10 @@ type Config struct {
 
 // Panel describes the panel and what evr-ptero created in it.
 type Panel struct {
-	URL      string     `yaml:"url"`
+	URL string `yaml:"url"`
+	// APIURL, when set, is used for API calls from this host (e.g. the panel's
+	// local address when a proxy with a login sits in front of URL).
+	APIURL   string     `yaml:"api_url,omitempty"`
 	Kind     panel.Kind `yaml:"kind"`
 	Local    bool       `yaml:"local"` // panel runs on this host (enables Pterodactyl 1.x extras)
 	NodeID   int        `yaml:"node_id"`

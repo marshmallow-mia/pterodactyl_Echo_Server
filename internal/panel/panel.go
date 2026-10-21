@@ -30,7 +30,8 @@ const (
 
 // Client is an API client for one panel.
 type Client struct {
-	URL       string // panel base URL, e.g. https://panel.example.com
+	URL       string // public panel URL, e.g. https://panel.example.com (also the websocket Origin)
+	APIURL    string // optional address used for API calls instead of URL (e.g. http://127.0.0.1 behind a proxy)
 	AppKey    string // application API key (ptla_… / peli_…)
 	ClientKey string // account API key of an admin (ptlc_… / pacc_…), for power, console and Pterodactyl 2 admin calls
 	Kind      Kind
@@ -59,7 +60,11 @@ func (c *Client) httpClient() *http.Client {
 }
 
 func (c *Client) do(ctx context.Context, method, path, key string, body io.Reader, contentType string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(c.URL, "/")+path, body)
+	base := c.URL
+	if c.APIURL != "" {
+		base = c.APIURL
+	}
+	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(base, "/")+path, body)
 	if err != nil {
 		return err
 	}
