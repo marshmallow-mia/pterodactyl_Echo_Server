@@ -378,8 +378,13 @@ func (c *Client) FindEgg(ctx context.Context, name string) (Egg, bool, error) {
 // with a root admin's account key. Pterodactyl 1.x has no API for it: use
 // Local.ImportEgg on the panel host.
 func (c *Client) ImportEgg(ctx context.Context, data []byte, update *Egg) (Egg, error) {
-	var resp struct {
-		Attributes Egg `json:"attributes"`
+	var raw json.RawMessage
+	decode := func(err error) (Egg, error) {
+		if err != nil || len(raw) == 0 {
+			return Egg{}, err
+		}
+		e, _ := item[Egg](raw)
+		return e, nil
 	}
 	switch c.Kind {
 	case Pelican:
@@ -387,8 +392,7 @@ func (c *Client) ImportEgg(ctx context.Context, data []byte, update *Egg) (Egg, 
 		if update != nil {
 			path = fmt.Sprintf("/eggs/%d/import", update.ID)
 		}
-		err := c.do(ctx, http.MethodPost, "/api/application"+path, c.AppKey, bytes.NewReader(data), "application/yaml", &resp)
-		return resp.Attributes, err
+		return decode(c.do(ctx, http.MethodPost, "/api/application"+path, c.AppKey, bytes.NewReader(data), "application/yaml", &raw))
 	case Pterodactyl2:
 		if c.ClientKey == "" {
 			return Egg{}, errors.New("importing eggs on Pterodactyl 2 needs a root admin's account API key")
@@ -402,8 +406,7 @@ func (c *Client) ImportEgg(ctx context.Context, data []byte, update *Egg) (Egg, 
 		if update != nil {
 			path = fmt.Sprintf("/api/admin/eggs/%d/import", update.ID)
 		}
-		err := c.do(ctx, http.MethodPost, path, c.ClientKey, &body, mw.FormDataContentType(), &resp)
-		return resp.Attributes, err
+		return decode(c.do(ctx, http.MethodPost, path, c.ClientKey, &body, mw.FormDataContentType(), &raw))
 	}
 	return Egg{}, errors.New("Pterodactyl 1.x cannot import eggs over its API; run evr-ptero on the panel host or import egg/egg-echovr-nevr.json in Admin → Nests")
 }
@@ -561,29 +564,29 @@ func (c *Client) EnsureMount(ctx context.Context, name, source, target string, e
 	default:
 		return Mount{}, errors.New("Pterodactyl 1.x has no mount API; run evr-ptero on the panel host or add the mount in Admin → Mounts")
 	}
-	var listed struct {
-		Data []struct {
-			Attributes Mount `json:"attributes"`
-		} `json:"data"`
-	}
-	if err := c.do(ctx, http.MethodGet, base+"?per_page=100", key, nil, "", &listed); err != nil {
+	var raw json.RawMessage
+	if err := c.do(ctx, http.MethodGet, base+"?per_page=100", key, nil, "", &raw); err != nil {
 		return Mount{}, err
 	}
+	listed, err := items[Mount](raw)
+	if err != nil {
+		return Mount{}, fmt.Errorf("listing mounts: %w", err)
+	}
 	var m Mount
-	for _, d := range listed.Data {
-		if d.Attributes.Name == name {
-			m = d.Attributes
+	for _, d := range listed {
+		if d.Name == name {
+			m = d
 		}
 	}
 	if m.ID == 0 {
 		b, _ := json.Marshal(map[string]any{"name": name, "source": source, "target": target, "read_only": true, "user_mountable": false, "description": "Echo VR shared files (evr-ptero)"})
-		var resp struct {
-			Attributes Mount `json:"attributes"`
-		}
+		var resp json.RawMessage
 		if err := c.do(ctx, http.MethodPost, base, key, bytes.NewReader(b), "application/json", &resp); err != nil {
 			return Mount{}, err
 		}
-		m = resp.Attributes
+		if m, err = item[Mount](resp); err != nil || m.ID == 0 {
+			return Mount{}, fmt.Errorf("creating mount %s: unexpected response %.200s", name, resp)
+		}
 	}
 	for kind, ids := range map[string][]int{"eggs": eggs, "nodes": nodes} {
 		if len(ids) == 0 {
@@ -595,6 +598,45 @@ func (c *Client) EnsureMount(ctx context.Context, name, source, target string, e
 		}
 	}
 	return m, nil
+}
+
+// item decodes one resource that may be wrapped as {"attributes": …},
+// {"data": …} or be flat (Pterodactyl 2's admin API).
+func item[T any](raw json.RawMessage) (T, error) {
+	var out T
+	var w struct {
+		Attributes json.RawMessage `json:"attributes"`
+		Data       json.RawMessage `json:"data"`
+	}
+	if json.Unmarshal(raw, &w) == nil {
+		switch {
+		case len(w.Attributes) > 0 && w.Attributes[0] == '{':
+			raw = w.Attributes
+		case len(w.Data) > 0 && w.Data[0] == '{':
+			return item[T](w.Data)
+		}
+	}
+	err := json.Unmarshal(raw, &out)
+	return out, err
+}
+
+// items decodes a list response ({"data": [...]}) of possibly wrapped items.
+func items[T any](raw json.RawMessage) ([]T, error) {
+	var w struct {
+		Data []json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &w); err != nil {
+		return nil, err
+	}
+	out := make([]T, 0, len(w.Data))
+	for _, d := range w.Data {
+		v, err := item[T](d)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, nil
 }
 
 // Escape is url.PathEscape, exported for callers building client paths.

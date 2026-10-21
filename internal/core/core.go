@@ -351,11 +351,6 @@ func (a *App) CreateServers(ctx context.Context, n int, set instance.Settings, s
 		if say != nil {
 			say(fmt.Sprintf("created %s on port %d", name, alloc.Port))
 		}
-		if a.Cfg.GameSource == "mount" {
-			if err := a.attachMounts(ctx, s); err != nil {
-				return created, err
-			}
-		}
 		created = append(created, s)
 	}
 	// Wait for the install step, then start.
@@ -378,6 +373,29 @@ func (a *App) attachMounts(ctx context.Context, s panel.Server) error {
 }
 
 func (a *App) startWhenInstalled(ctx context.Context, s panel.Server, say func(string)) error {
+	// Pterodactyl 2 only attaches mounts to installed servers, so wait for
+	// the install step to finish first (harmless on the other panels).
+	if a.Cfg.GameSource == "mount" {
+		deadline := time.Now().Add(30 * time.Minute)
+		for {
+			err := a.attachMounts(ctx, s)
+			if err == nil {
+				break
+			}
+			var ae *panel.APIError
+			if !errors.As(err, &ae) || (ae.Status != 409 && ae.Status != 400 && ae.Status != 422) || time.Now().After(deadline) {
+				return fmt.Errorf("%s: attaching the shared files: %w", s.Name, err)
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(5 * time.Second):
+			}
+		}
+		if say != nil {
+			say(s.Name + ": shared game files attached")
+		}
+	}
 	if a.Secrets[pcfg.SecretClientKey] == "" {
 		if say != nil {
 			say(s.Name + ": start it in the panel (no account API key configured)")
