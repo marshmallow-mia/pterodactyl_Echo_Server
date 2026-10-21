@@ -22,7 +22,7 @@ import (
 const (
 	DefaultDir     = "/etc/evr-ptero"
 	DefaultDataDir = "/srv/echovr"
-	DefaultImage   = "ghcr.io/marshmallow-mia/echovr-pterodactyl:2"
+	DefaultImage   = "ghcr.io/marshmallow-mia/echovr-pterodactyl:edge" // switch to :2 with the v2.0.0 release
 	DefaultNest    = "Echo VR"
 	FirstPort      = 6792
 )
