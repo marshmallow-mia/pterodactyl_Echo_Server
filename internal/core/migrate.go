@@ -77,6 +77,12 @@ func (a *App) MigrateServers(ctx context.Context, list []LegacyServer, say func(
 			}
 			say(s.Name + ": shared files attached")
 		}
+		if a.DeviceLinked() {
+			if err := a.installDeviceLink(s); err != nil {
+				return fmt.Errorf("%s: device link: %w", s.Name, err)
+			}
+			say(s.Name + ": device link installed")
+		}
 		if a.Secrets["PANEL_CLIENT_KEY"] != "" {
 			if err := p.Power(ctx, s.Identifier, "restart"); err != nil {
 				return fmt.Errorf("%s: restart: %w", s.Name, err)
