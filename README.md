@@ -20,7 +20,8 @@ The installer downloads a checksum-verified `evr-ptero` binary of the newest rel
 pre-release while there is no stable one; `EVR_VERSION=v2.0.0` picks one) and opens the setup wizard. Choose one of:
 
 - **Install a panel with Wings on this host.** Pick Pterodactyl 1.15 (stable), Pterodactyl 2.0 (beta) or Pelican 1.0
-  (release candidate), then answer a few questions: the domain, your admin email, how HTTPS is handled, and the ports.
+  (release candidate), then answer a few questions: the domain, your admin email and password (or leave it empty to have one generated),
+  how HTTPS is handled, and the ports.
   For HTTPS you can choose:
   - a Let's Encrypt certificate (port 80 must reach this host);
   - a reverse proxy that already handles HTTPS, such as Pangolin or Traefik;
@@ -96,7 +97,7 @@ version, and how many matches and restarts it has had.
 | `a` / `e` / `d` | add servers / edit one (regions, guilds, tick rate, empty TTL, runtime pin) / delete |
 | `i` | reinstall a server (runs the egg's install step again) |
 | `c` | account: sign-in state and registered servers; `l` links this host at echovrce.com/device, `p` signs in with a password |
-| `m` | more: runtime versions and updates, Discord alerts and the background service, moving servers from an old Echo egg, the panel connection, re-running the setup, the egg files, uninstalling the panel |
+| `m` | more: runtime versions and updates, Discord alerts and the background service, moving servers from an old Echo egg, the panel connection, the panel admin login (show it, set or generate a new password), re-running the setup, the egg files, uninstalling the panel |
 
 A running device link can be cancelled with `esc`, and a failed one retried with `l`.
 
@@ -108,6 +109,8 @@ Everything in the dashboard is also a command, and every command is also in the 
 ```
 evr-ptero init                          guided setup; with flags unattended (init --help)
 evr-ptero panel install|setup|info      install a panel here / prepare a panel / show the connection
+evr-ptero panel login [--show-password]  the admin login the installer created
+evr-ptero panel password [--user EMAIL] [--generate | --password-stdin]   change a panel user's password
 evr-ptero panel uninstall [--purge-packages --purge-docker]
 evr-ptero server ls
 evr-ptero server create -n 2 [--regions euw] [--guilds ID,…]
@@ -191,6 +194,9 @@ server the account from the setup and the shared game files, and restarts it. Th
   - `udp_unreachable`: the backend could not reach the game port; check the 1:1 port forward.
   - `registration_rejected`: the server did not register in time.
 - Under Proxmox LXC, Docker needs `nesting=1,keyctl=1`.
+- Can't log in to the panel? `m` → Panel admin login and password (or `sudo evr-ptero panel login --show-password`)
+  shows the admin login; set a new password there or with `evr-ptero panel password`. "Forgot password" in the panel
+  needs mail, which the installer does not set up.
 - The panel installer resumes where it stopped: run the same command (or the wizard) again after fixing the cause.
 
 ## Building

@@ -22,6 +22,7 @@ import (
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/config"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/core"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/egg"
+	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/panelinstall"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/pcfg"
 )
 
@@ -195,6 +196,7 @@ create the mounts yourself when asked.`,
 	f.BoolVar(&noLink, "no-link", false, "without a password: do not link this host at echovrce.com/device now")
 	cmd.AddCommand(setup)
 	panelInstallCmds(g, cmd)
+	cmd.AddCommand(panelPasswordCmd(g), panelLoginCmd(g))
 	cmd.AddCommand(&cobra.Command{
 		Use: "info", Short: "Show the panel connection",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -598,4 +600,82 @@ in its _local/.credentials.json (running ones restart).`,
 		},
 	})
 	return cmd
+}
+
+func panelPasswordCmd(g *globals) *cobra.Command {
+	var email string
+	var stdin, generate bool
+	c := &cobra.Command{
+		Use:   "password",
+		Short: "Change a panel user's password (default: the admin)",
+		Long: `Sets a new password through the panel's API. Without --user it changes the
+admin account the installer created (or the first admin). Asks for the new
+password twice; --generate makes one and prints it; --password-stdin reads it.`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			a, err := g.app()
+			if err != nil {
+				return err
+			}
+			var pw string
+			switch {
+			case generate:
+				pw = panelinstall.RandomPassword()
+			case stdin || !term.IsTerminal(int(os.Stdin.Fd())):
+				if pw, err = readSecret(""); err != nil {
+					return err
+				}
+			default:
+				if pw, err = readSecret("New panel password: "); err != nil {
+					return err
+				}
+				again, err := readSecret("Again: ")
+				if err != nil {
+					return err
+				}
+				if again != pw {
+					return errors.New("the passwords do not match")
+				}
+			}
+			u, err := a.SetPanelPassword(cmd.Context(), email, pw)
+			if err != nil {
+				return err
+			}
+			if generate {
+				g.say("New password for %s (%s): %s", u.Email, u.Username, pw)
+			} else {
+				g.say("Password of %s (%s) changed.", u.Email, u.Username)
+			}
+			return nil
+		},
+	}
+	c.Flags().StringVar(&email, "user", "", "email of the panel user (default: the admin)")
+	c.Flags().BoolVar(&stdin, "password-stdin", false, "read the new password from stdin")
+	c.Flags().BoolVar(&generate, "generate", false, "generate a password and print it")
+	return c
+}
+
+func panelLoginCmd(g *globals) *cobra.Command {
+	var show bool
+	c := &cobra.Command{
+		Use:   "login",
+		Short: "Show the panel admin login the installer created on this host",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			email, user, pw := panelinstall.AdminLogin()
+			if email == "" {
+				return errors.New("no panel was installed on this host by evr-ptero")
+			}
+			url := ""
+			if a, err := g.app(); err == nil {
+				url = a.Cfg.Panel.URL
+			}
+			if !show {
+				pw = "(hidden; --show-password prints it)"
+			}
+			return g.print(map[string]string{"url": url, "email": email, "username": user}, func(w io.Writer) {
+				fmt.Fprintf(w, "Panel:    %s\nEmail:    %s\nUsername: %s\nPassword: %s\n", url, email, user, pw)
+			})
+		},
+	}
+	c.Flags().BoolVar(&show, "show-password", false, "print the password")
+	return c
 }

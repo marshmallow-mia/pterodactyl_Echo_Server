@@ -319,6 +319,24 @@ type User struct {
 // Users lists users.
 func (c *Client) Users(ctx context.Context) ([]User, error) { return list[User](ctx, c, "/users") }
 
+// SetUserPassword changes a user's password. The panels validate the whole
+// user on update, so its current fields are sent along unchanged.
+func (c *Client) SetUserPassword(ctx context.Context, id int, password string) error {
+	var cur struct {
+		Attributes map[string]any `json:"attributes"`
+	}
+	if err := c.app(ctx, http.MethodGet, fmt.Sprintf("/users/%d", id), nil, &cur); err != nil {
+		return err
+	}
+	body := map[string]any{"password": password}
+	for _, k := range []string{"email", "username", "first_name", "last_name", "language", "timezone", "external_id"} {
+		if v, ok := cur.Attributes[k]; ok && v != nil {
+			body[k] = v
+		}
+	}
+	return c.app(ctx, http.MethodPatch, fmt.Sprintf("/users/%d", id), body, nil)
+}
+
 // Egg is an egg as the API lists it.
 type Egg struct {
 	ID           int               `json:"id"`
