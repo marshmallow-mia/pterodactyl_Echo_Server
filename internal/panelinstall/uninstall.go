@@ -54,7 +54,7 @@ rm -rf /etc/nginx /var/lib/mysql /etc/mysql /etc/php /var/lib/php /etc/redis /va
 	if o.Docker {
 		steps = append(steps, Step{Name: "Purge Docker", Run: func(ctx context.Context, r *Runner) error {
 			return r.Sh(ctx, `docker ps -aq | xargs -r docker rm -f >/dev/null 2>&1 || true
-pk=$(dpkg-query -W -f='${Package}\n' | grep -E '^(docker-ce|docker-buildx|docker-compose|containerd)' | tr '\n' ' ')
+pk=$(dpkg-query -W -f='${Package}\n' | grep -E '^(docker-|containerd)' | tr '\n' ' ')
 [ -z "$pk" ] || apt-get purge -y -qq $pk >/dev/null
 rm -rf /var/lib/docker /var/lib/containerd /etc/docker /etc/apt/sources.list.d/docker.list`)
 		}})
