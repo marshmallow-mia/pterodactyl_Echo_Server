@@ -365,7 +365,10 @@ apt-get update -qq`)
 			if o.TLS == "letsencrypt" {
 				pkgs += " certbot"
 			}
-			return r.Sh(ctx, fmt.Sprintf(`apt-get install -y -qq %s >/dev/null
+			// Refresh the lists every time: a repository step skipped as
+			// "already done" leaves them stale and old builds 404.
+			return r.Sh(ctx, fmt.Sprintf(`apt-get update -qq
+apt-get install -y -qq %s >/dev/null
 update-alternatives --set php /usr/bin/php%s
 systemctl enable --now php%s-fpm redis-server >/dev/null 2>&1`, pkgs, in.php, in.php))
 		}},
