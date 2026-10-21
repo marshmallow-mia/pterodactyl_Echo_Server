@@ -157,9 +157,10 @@ func (m *Model) renderAccount() string {
 // The "more" menu.
 
 func (m *Model) menu() tea.Cmd {
-	choice := "runtime"
+	choice := "updates"
 	opts := []huh.Option[string]{
-		huh.NewOption("Runtime versions and updates", "runtime"),
+		huh.NewOption("Updates (evr-ptero, game files, nevr-runtime, panel, Wings)", "updates"),
+		huh.NewOption("Runtime versions", "runtime"),
 		huh.NewOption("Discord alerts and the background service", "alerts"),
 		huh.NewOption("EchoVRCE account", "account"),
 		huh.NewOption("Move servers from an old Echo egg", "migrate"),
@@ -174,6 +175,8 @@ func (m *Model) menu() tea.Cmd {
 	f := huh.NewForm(huh.NewGroup(huh.NewSelect[string]().Title("What do you want to do?").Options(opts...).Value(&choice)).Title("More"))
 	return m.ShowForm(f, func() tea.Cmd {
 		switch choice {
+		case "updates":
+			return m.openUpdates()
 		case "runtime":
 			return m.openRuntime()
 		case "alerts":
@@ -379,7 +382,7 @@ func (m *Model) updateRuntime(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) channelForm() tea.Cmd {
 	app := m.App
-	channel, pinned, auto := app.Cfg.Runtime.Channel, app.Cfg.Runtime.Pinned, app.Cfg.Runtime.AutoUpdate
+	channel, pinned, auto := app.Cfg.Runtime.Channel, app.Cfg.Runtime.Pinned, app.Cfg.Updates.Runtime == "auto"
 	f := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().Title("Which versions should updates follow?").Options(
@@ -394,7 +397,10 @@ func (m *Model) channelForm() tea.Cmd {
 		).WithHideFunc(func() bool { return channel != "pinned" }),
 	)
 	return m.ShowForm(f, func() tea.Cmd {
-		app.Cfg.Runtime.Channel, app.Cfg.Runtime.AutoUpdate = channel, auto
+		app.Cfg.Runtime.Channel, app.Cfg.Updates.Runtime = channel, "notify"
+		if auto {
+			app.Cfg.Updates.Runtime = "auto"
+		}
 		app.Cfg.Runtime.Pinned = ""
 		if channel == "pinned" {
 			app.Cfg.Runtime.Pinned = pinned
@@ -416,9 +422,9 @@ func (m *Model) renderRuntime() string {
 		policy = "Pinned to " + cfg.Pinned
 	}
 	switch {
-	case cfg.AutoUpdate && agent.ServiceInstalled():
+	case m.App.Cfg.Updates.Runtime == "auto" && agent.ServiceInstalled():
 		policy += "; the background service rolls them out automatically."
-	case cfg.AutoUpdate:
+	case m.App.Cfg.Updates.Runtime == "auto":
 		policy += "; automatic updates need the background service (More → Discord alerts and the background service)."
 	default:
 		policy += "; automatic updates are off."

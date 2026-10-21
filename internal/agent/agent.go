@@ -16,6 +16,7 @@ import (
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/notify"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/status"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/update"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/updates"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/core"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/pcfg"
 )
@@ -67,11 +68,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			a.watch(ctx, app)
 			if time.Now().After(nextUpdate) {
 				a.checkUpdates(ctx, app, host)
-				h := app.Cfg.Runtime.CheckHours
-				if h <= 0 {
-					h = 6
-				}
-				nextUpdate = time.Now().Add(time.Duration(h) * time.Hour)
+				nextUpdate = time.Now().Add(app.Cfg.Updates.Settings().Interval())
 			}
 		}
 		select {
@@ -120,30 +117,11 @@ func (a *Agent) watch(ctx context.Context, app *core.App) {
 }
 
 func (a *Agent) checkUpdates(ctx context.Context, app *core.App, host string) {
-	u := Updater(app, func(s string) { a.log("%s", s) })
-	pol := update.Policy{Channel: app.Cfg.Runtime.Channel, Pinned: app.Cfg.Runtime.Pinned}
 	n := notifier(app)
-	if !app.Cfg.Runtime.AutoUpdate {
-		cur, target, available, err := u.Check(ctx, pol)
-		if err == nil && available {
-			_ = n.Send(ctx, notify.Event{Kind: notify.EventUpdateAvailable, Level: notify.Info, Host: host,
-				Title: "nevr-runtime " + target.Tag + " is available", Text: "Current: " + cur + ". Roll it out in evr-ptero (m → Runtime & updates) or with `evr-ptero update apply`."})
-		}
-		return
-	}
-	res, err := u.Run(ctx, pol)
-	if err != nil {
-		a.log("update: %v", err)
-		return
-	}
-	switch res.Action {
-	case "switched":
-		_ = n.Send(ctx, notify.Event{Kind: notify.EventUpdateApplied, Level: notify.Good, Host: host, Title: "nevr-runtime " + res.To + " rolled out",
-			Text: fmt.Sprintf("Canary %s registered; the other servers switch at their next match boundary (was %s).", res.Canary, res.From)})
-	case "rolled_back":
-		_ = n.Send(ctx, notify.Event{Kind: notify.EventUpdateRolledBack, Level: notify.Warning, Host: host, Title: "nevr-runtime " + res.To + " failed on " + res.Canary,
-			Text: "Staying on " + res.From + ". " + res.Detail})
-	}
+	sched := &updates.Scheduler{Dir: app.Dir, Log: func(s string) { a.log("%s", s) }, Event: func(e updates.Event) {
+		_ = n.Send(ctx, UpdateEvent(e, host))
+	}}
+	sched.Run(ctx, Components(app, func(s string) { a.log("%s", s) }), app.Cfg.Updates.Settings())
 }
 
 // Updater returns an updater for the node's shared runtime store whose

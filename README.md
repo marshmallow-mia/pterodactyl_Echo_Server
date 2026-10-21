@@ -96,8 +96,9 @@ version, and how many matches and restarts it has had.
 | `s` / `x` / `r` / `K` | start / stop / restart / kill |
 | `a` / `e` / `d` | add servers / edit one (regions, guilds, tick rate, empty TTL, runtime pin) / delete |
 | `i` | reinstall a server (runs the egg's install step again) |
+| `U` | updates of evr-ptero, the game files, nevr-runtime, the panel and Wings: install, pick a version, settings |
 | `c` | account: sign-in state and registered servers; `l` links this host at echovrce.com/device, `p` signs in with a password |
-| `m` | more: runtime versions and updates, Discord alerts and the background service, moving servers from an old Echo egg, the panel connection, the panel admin login (show it, set or generate a new password), re-running the setup, the egg files, uninstalling the panel |
+| `m` | more: runtime versions and updates, Discord alerts and the background service, updates, moving servers from an old Echo egg, the panel connection, the panel admin login (show it, set or generate a new password), re-running the setup, the egg files, uninstalling the panel |
 
 A running device link can be cancelled with `esc`, and a failed one retried with `l`.
 
@@ -120,7 +121,7 @@ evr-ptero server logs NAME               follow the console
 evr-ptero server reinstall|rm NAME
 evr-ptero account link|set|test|servers  device link (no password) or password sign-in; updates every server
 evr-ptero runtime ls|use TAG|rollback|remove TAG
-evr-ptero update check|apply             new nevr-runtime: canary on an idle server, then switch
+evr-ptero update [check|ls|apply|settings]   evr-ptero itself, game files, nevr-runtime, panel, Wings
 evr-ptero agent install|uninstall|run|webhook URL  metrics, Discord alerts, automatic runtime updates
 evr-ptero files install                  game and runtime into a directory
 evr-ptero egg export --format ptdl|plcn  the egg for importing by hand
@@ -137,24 +138,44 @@ sudo evr-ptero init --mode install --product pelican --fqdn panel.example.org --
 Without `--password-stdin` the setup ends with the device link and prints the code to approve, like the wizard
 (`--no-link` skips it).
 
-## Updates, alerts and metrics
+## Updates
+
+`U` in the dashboard lists every part with the installed and the available version. `enter` updates one (you can pick
+the version), `c` checks again, `s` sets how each part is updated:
+
+| Part | What an update does | Default |
+|---|---|---|
+| `evr-ptero` | downloads the new release, checks it against `checksums.txt`, replaces the binary (the old one stays as `evr-ptero.prev`) and restarts; the egg and the servers move to the image released with it, each server at its next restart | notify |
+| game files | fetches missing or changed files of the node's shared copy from the mirror and verifies the build; servers use them from their next restart. Echo VR no longer changes, so this is a repair | notify |
+| nevr-runtime | installs the version of the runtime channel and tries it on one idle server first; only if that server registers do the others switch, at their next match boundary. A version that fails is skipped | auto |
+| panel | backs up the panel files and database to `/var/backups/evr-ptero` (the last 3 are kept), maintenance mode, the new release, `composer install`, migrations, queue restart. If the panel API does not answer afterwards, the backup is restored | notify |
+| Wings | replaces the binary and restarts Wings; game servers keep running. If Wings does not come back, the old binary is put back | notify |
+
+The panel and Wings appear when they run on this host. Each part is `off`, `notify` (checked; shown in the dashboard
+and sent as a Discord alert) or `auto` (installed by the background service), optionally only inside a time window such
+as `04:00-06:00`. The panel follows its installed channel (Pterodactyl 1.x stable, or 2.x beta); you can pick any newer
+release by hand, and moving to another channel, e.g. 1.x to 2.x, asks you to type the version first, because that
+migration only goes forward. The same with commands:
+
+```
+evr-ptero update                                   check everything
+evr-ptero update ls self|game|runtime|panel|wings  versions to choose from
+evr-ptero update apply panel [--version V] [--dry-run]
+evr-ptero update settings --panel notify --wings auto --window 04:00-06:00 [--panel-channel beta]
+```
+
+Mods will be one more part here.
+
+## Alerts and metrics
 
 A small background service on the node (dashboard: `m` → Discord alerts and the background service, or
-`sudo evr-ptero agent install`) does three things:
+`sudo evr-ptero agent install`) runs the update checks above, and:
 
-- **Runtime updates.** New nevr-runtime releases are installed into the shared files and tried on one idle server
-  first. Only if that server registers does `current` switch; the other servers switch at their next match boundary.
-  A version that fails is skipped.
 - **Discord alerts.** Enter a webhook URL in the same dashboard form (or `evr-ptero agent webhook https://discord.com/api/webhooks/…`)
   and a test message is sent. You then get
-  alerts when a server stops on an error, keeps restarting, stays down or recovers, and when an update is rolled out
-  or rolled back.
+  alerts when a server stops on an error, keeps restarting, stays down or recovers, and when an update is available,
+  installed or fails.
 - **Prometheus metrics** on `127.0.0.1:9470/metrics`.
-
-To update `evr-ptero` itself, run the installer again, then re-run the setup (`m` → Re-run the panel setup, or
-`sudo evr-ptero panel setup`). Each version uses the image
-released with it (`echovr-pterodactyl:<version>`), and the setup moves the egg and the servers to it. A server uses the
-new image from its next restart.
 
 ## Doing it yourself
 
