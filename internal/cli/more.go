@@ -8,13 +8,11 @@ import (
 	"log"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/config"
-	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/notify"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/update"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/agent"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/core"
@@ -88,6 +86,16 @@ func runtimeCmd(g *globals) *cobra.Command {
 				return err
 			}
 			return a.Store().Use(args[0])
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use: "remove TAG", Short: "Delete an installed version that is not in use", Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			a, err := g.app()
+			if err != nil {
+				return err
+			}
+			return a.Store().Remove(args[0])
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
@@ -181,23 +189,20 @@ func agentCmd(g *globals) *cobra.Command {
 	cmd.AddCommand(&cobra.Command{
 		Use: "install", Short: "Install and start the agent as a systemd service",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			exe, err := os.Executable()
-			if err != nil {
+			if err := agent.InstallService(g.dir); err != nil {
 				return err
-			}
-			if exe, err = filepath.EvalSymlinks(exe); err != nil {
-				return err
-			}
-			unit := fmt.Sprintf("[Unit]\nDescription=evr-ptero agent (Echo VR server metrics, alerts, updates)\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nExecStart=%s --config-dir %s agent run\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=multi-user.target\n", exe, g.dir)
-			if err := os.WriteFile("/etc/systemd/system/evr-ptero-agent.service", []byte(unit), 0o644); err != nil {
-				return err
-			}
-			for _, args := range [][]string{{"daemon-reload"}, {"enable", "evr-ptero-agent.service"}, {"restart", "evr-ptero-agent.service"}} {
-				if out, err := exec.Command("systemctl", args...).CombinedOutput(); err != nil {
-					return fmt.Errorf("systemctl %v: %v: %s", args, err, out)
-				}
 			}
 			g.say("evr-ptero-agent installed and started")
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use: "uninstall", Short: "Stop and remove the agent service",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := agent.RemoveService(); err != nil {
+				return err
+			}
+			g.say("evr-ptero-agent removed")
 			return nil
 		},
 	})
@@ -209,22 +214,23 @@ func agentCmd(g *globals) *cobra.Command {
 				return err
 			}
 			if len(args) == 1 {
-				if args[0] == "off" {
-					delete(a.Secrets, pcfg.SecretWebhook)
-				} else {
-					a.Secrets[pcfg.SecretWebhook] = args[0]
+				url := args[0]
+				if url == "off" {
+					url = ""
 				}
-				if err := a.Secrets.Save(a.Dir); err != nil {
+				if err := agent.SetWebhook(cmd.Context(), a, url); err != nil {
 					return err
+				}
+				if url != "" {
+					g.say("saved; test message sent")
+					return nil
 				}
 			}
 			if a.Secrets[pcfg.SecretWebhook] == "" {
 				g.say("Discord alerts are off")
 				return nil
 			}
-			host, _ := os.Hostname()
-			if err := (&notify.Notifier{URL: a.Secrets[pcfg.SecretWebhook]}).Send(cmd.Context(), notify.Event{Kind: "test", Level: notify.Info, Host: host,
-				Title: "evr-ptero alerts are set up", Text: "This channel will get alerts about the Echo VR servers in " + a.Cfg.Panel.URL + "."}); err != nil {
+			if err := agent.TestWebhook(cmd.Context(), a, a.Secrets[pcfg.SecretWebhook]); err != nil {
 				return err
 			}
 			g.say("test message sent")

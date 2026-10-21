@@ -17,6 +17,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/instance"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/auth"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/supervisor"
 	ui "github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/tui"
@@ -45,6 +46,8 @@ const (
 	scrForm
 	scrBusy
 	scrAccount
+	scrRuntime
+	scrInfo
 )
 
 // Model is the TUI state.
@@ -72,9 +75,19 @@ type Model struct {
 	busyDone  bool
 	busyErr   error
 	afterBusy func() tea.Cmd
-	spin      spinner.Model
+	// busyRetry is offered with l when the task failed (the device link).
+	busyRetry func() tea.Cmd
+	// busyCancel stops the task on esc when busyCanCancel is set.
+	busyCancel    context.CancelFunc
+	busyCanCancel bool
+	spin          spinner.Model
 
 	account *accountInfo
+
+	rtTable  table.Model
+	runtimes []nevr.Installed
+
+	infoTitle, infoText string
 
 	confirm       string
 	confirmFunc   func() tea.Cmd
@@ -97,6 +110,9 @@ func New(ctx context.Context, dir string) *Model {
 	s.Header = s.Header.Bold(true).Foreground(ui.Accent).BorderStyle(lipgloss.NormalBorder()).BorderBottom(true)
 	s.Selected = s.Selected.Foreground(lipgloss.Color("#FFFFFF")).Background(ui.Accent).Bold(false)
 	m.table.SetStyles(s)
+	m.rtTable = table.New(table.WithColumns([]table.Column{{Title: "VERSION", Width: 14}, {Title: "STATE", Width: 12}, {Title: "INSTALLED", Width: 12}, {Title: "NOTE", Width: 40}}),
+		table.WithFocused(true), table.WithHeight(8))
+	m.rtTable.SetStyles(s)
 	m.logs = ui.NewLogView(func(l string) bool { return !supervisor.DefaultFilter(supervisor.Clean(l)) })
 	app, err := core.Open(dir)
 	switch {
@@ -174,9 +190,13 @@ func waitChan(ch <-chan tea.Msg) tea.Cmd {
 // Run executes a long task on the busy screen.
 func (m *Model) Run(title string, task func(ctx context.Context, say func(string)) error, after func() tea.Cmd) tea.Cmd {
 	m.screen, m.busyTitle, m.busyLines, m.busyDone, m.busyErr, m.afterBusy = scrBusy, title, nil, false, nil, after
+	m.busyRetry, m.busyCanCancel = nil, false
+	ctx, cancel := context.WithCancel(m.Ctx)
+	m.busyCancel = cancel
 	ch := make(chan tea.Msg, 128)
 	go func() {
-		err := task(m.Ctx, func(s string) { ch <- busyLineMsg{s} })
+		defer cancel()
+		err := task(ctx, func(s string) { ch <- busyLineMsg{s} })
 		ch <- busyDoneMsg{err}
 		close(ch)
 	}()
@@ -212,6 +232,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetColumns(columns(msg.Width))
 		m.table.SetWidth(msg.Width)
 		m.table.SetHeight(max(msg.Height-12, 4))
+		m.rtTable.SetWidth(msg.Width)
+		m.rtTable.SetHeight(max(msg.Height-14, 4))
 		m.logs.SetSize(msg.Width, msg.Height-4)
 		if m.form != nil {
 			m.form = m.form.WithWidth(min(msg.Width-4, 90))
@@ -234,7 +256,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case busyDoneMsg:
 		m.busyDone, m.busyErr = true, msg.err
+		var lf linkFailed
+		if errors.As(msg.err, &lf) && m.App != nil {
+			m.busyRetry = m.linkDevice
+		}
 		return m, nil
+	case runtimesMsg:
+		m.runtimes = msg.list
+		if msg.err != nil {
+			m.flash, m.flashBad = msg.err.Error(), true
+		}
+		m.refreshRuntimes()
+		return m, nil
+	case legacyMsg:
+		return m, m.migrateForm(msg)
 	case accountMsg:
 		m.account = msg
 		return m, nil
@@ -288,7 +323,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, cmd
 	case scrBusy:
-		if k, ok := msg.(tea.KeyPressMsg); ok && m.busyDone && (k.String() == "enter" || k.String() == "esc" || k.String() == "q") {
+		k, ok := msg.(tea.KeyPressMsg)
+		if ok && !m.busyDone && k.String() == "esc" && m.busyCanCancel {
+			m.busyCancel()
+			return m, nil
+		}
+		if ok && m.busyDone && m.busyErr != nil && m.busyRetry != nil && k.String() == "l" {
+			return m, m.busyRetry()
+		}
+		if ok && m.busyDone && (k.String() == "enter" || k.String() == "esc" || k.String() == "q") {
 			m.screen = scrDashboard
 			if m.afterBusy != nil && m.busyErr == nil {
 				return m, m.afterBusy()
@@ -311,14 +354,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logs, cmd = m.logs.Update(msg)
 		return m, cmd
 	case scrAccount:
-		if k, ok := msg.(tea.KeyPressMsg); ok {
-			switch k.String() {
-			case "esc", "q":
-				m.screen = scrDashboard
-			case "r":
-				m.account = nil
-				return m, m.loadAccount()
-			}
+		return m.updateAccount(msg)
+	case scrRuntime:
+		return m.updateRuntime(msg)
+	case scrInfo:
+		if k, ok := msg.(tea.KeyPressMsg); ok && (k.String() == "esc" || k.String() == "q" || k.String() == "enter") {
+			m.screen = scrDashboard
+			return m, m.LoadServers()
 		}
 		return m, nil
 	}
@@ -391,7 +433,19 @@ func (m *Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.ask(fmt.Sprintf("%s %s? Players in a match are disconnected.", strings.ToUpper(sig[:1])+sig[1:], sel.Name()), run)
 	case "a":
+		if !app.HasAccount() {
+			m.flash, m.flashBad = "Sign in first: l links this host (no password), p uses a password.", true
+			return m, m.openAccount()
+		}
 		return m, m.addForm()
+	case "i":
+		if has {
+			m.ask("Reinstall "+sel.Name()+"? It stops and runs the egg's install step again.", func() tea.Cmd {
+				return m.quick(sel.Name()+": reinstalling", func(ctx context.Context) error { return app.Panel().Reinstall(ctx, sel.Panel.ID) })
+			})
+		}
+	case "m":
+		return m, m.menu()
 	case "e":
 		if has {
 			return m, m.editForm(sel)
@@ -403,13 +457,9 @@ func (m *Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 	case "c":
-		m.screen, m.account = scrAccount, nil
-		return m, m.loadAccount()
+		return m, m.openAccount()
 	case "S":
-		return m, m.Run("Re-running panel setup", func(ctx context.Context, say func(string)) error {
-			_, err := core.Setup(ctx, m.Dir, core.SetupOptions{}, func(step, detail string) { say(step + ": " + detail) })
-			return err
-		}, nil)
+		return m, m.rerunSetup()
 	}
 	var cmd tea.Cmd
 	m.table, cmd = m.table.Update(msg)
@@ -464,15 +514,16 @@ func split(s string) []string {
 }
 
 func (m *Model) addForm() tea.Cmd {
-	count, regions := "1", strings.Join(m.App.Cfg.Defaults.Regions, ",")
+	count, regions, guilds := "1", strings.Join(m.App.Cfg.Defaults.Regions, ","), strings.Join(m.App.Cfg.Defaults.Guilds, ",")
 	f := huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("How many servers?").Description("They get free ports on the node and start after installing.").Value(&count).Validate(intRange(1, 32)),
-		huh.NewInput().Title("Regions (optional)").Value(&regions),
+		huh.NewInput().Title("Regions (optional)").Description("Comma-separated, e.g. euw,default.").Value(&regions),
+		huh.NewInput().Title("Guilds (optional)").Description("Guild IDs to host for; empty = all the account may host.").Value(&guilds),
 	).Title("Add Echo VR servers"))
 	app := m.App
 	return m.ShowForm(f, func() tea.Cmd {
 		n, _ := strconv.Atoi(count)
-		set := instance.Settings{Regions: split(regions)}
+		set := instance.Settings{Regions: split(regions), Guilds: split(guilds)}
 		return m.Run(fmt.Sprintf("Creating %d server(s)", n), func(ctx context.Context, say func(string)) error {
 			_, err := app.CreateServers(ctx, n, set, say)
 			return err
@@ -483,11 +534,14 @@ func (m *Model) addForm() tea.Cmd {
 func (m *Model) editForm(s core.Server) tea.Cmd {
 	set := core.SettingsFromEnv(s.Panel.Env())
 	regions, guilds, tick, runtime := strings.Join(set.Regions, ","), strings.Join(set.Guilds, ","), strconv.Itoa(set.TickRate), set.Runtime
+	ttl, restart := strconv.Itoa(set.EmptyTTL), true
 	f := huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("Regions").Value(&regions),
 		huh.NewInput().Title("Guilds").Description("Guild IDs to host for; empty = all the account may host.").Value(&guilds),
 		huh.NewInput().Title("Tick rate (Hz)").Value(&tick).Validate(intRange(10, 1000)),
+		huh.NewInput().Title("Empty server TTL (seconds)").Description("0 keeps the runtime's default.").Value(&ttl).Validate(intRange(0, 86400)),
 		huh.NewInput().Title("nevr-runtime").Description(`"current" follows the node; or a tag like v5.4.2.`).Value(&runtime),
+		huh.NewConfirm().Title("Restart now if it is running?").Description("Otherwise the change applies at its next restart.").Value(&restart),
 	).Title("Edit " + s.Name()))
 	app := m.App
 	return m.ShowForm(f, func() tea.Cmd {
@@ -495,28 +549,17 @@ func (m *Model) editForm(s core.Server) tea.Cmd {
 			err := app.UpdateServer(ctx, s, func(cur *instance.Settings) {
 				cur.Regions, cur.Guilds = split(regions), split(guilds)
 				cur.TickRate, _ = strconv.Atoi(tick)
+				cur.EmptyTTL, _ = strconv.Atoi(ttl)
 				cur.Runtime = runtime
-			}, true)
-			if err == nil {
+			}, restart)
+			if err == nil && restart {
 				say("saved; the server restarts if it was running")
+			} else if err == nil {
+				say("saved; applies at the next restart")
 			}
 			return err
 		}, nil)
 	})
-}
-
-func (m *Model) loadAccount() tea.Cmd {
-	app := m.App
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(m.Ctx, 20*time.Second)
-		defer cancel()
-		info := &accountInfo{}
-		info.session, info.err = app.Login(ctx)
-		if info.err == nil {
-			info.servers, _ = app.Auth().MyServers(ctx, info.session)
-		}
-		return accountMsg(info)
-	}
 }
 
 func (m *Model) View() tea.View {
@@ -532,6 +575,15 @@ func (m *Model) header() string {
 	}
 	p := m.App.Cfg.Panel
 	return t + "  " + ui.Subtle.Render(fmt.Sprintf("%s (%s) · node #%d · runtime %s", p.URL, p.Kind, p.NodeID, orDash(m.App.Store().Current())))
+}
+
+// wrap breaks s to the terminal width minus indent.
+func (m *Model) wrap(s string, indent int) string {
+	w := m.width - indent
+	if w < 20 {
+		w = 76
+	}
+	return lipgloss.NewStyle().Width(w).Render(s)
 }
 
 func orDash(s string) string {
@@ -560,25 +612,37 @@ func (m *Model) render() string {
 		return m.header() + "\n\n" + m.form.View()
 	case scrBusy:
 		var b strings.Builder
+		cancelled := errors.Is(m.busyErr, context.Canceled)
 		head := m.spin.View() + " " + ui.Bold.Render(m.busyTitle)
-		if m.busyDone && m.busyErr != nil {
+		switch {
+		case m.busyDone && cancelled:
+			head = ui.Warning.Render("✘ " + m.busyTitle + ": cancelled")
+		case m.busyDone && m.busyErr != nil:
 			head = ui.Error.Render("✘ " + m.busyTitle + " failed")
-		} else if m.busyDone {
+		case m.busyDone:
 			head = ui.Success.Render("✔ " + m.busyTitle)
 		}
 		b.WriteString(m.header() + "\n\n" + head + "\n\n")
-		lines := m.busyLines
+		var lines []string
+		for _, l := range m.busyLines {
+			lines = append(lines, strings.Split(m.wrap(l, 4), "\n")...)
+		}
 		if n := m.height - 9; n > 0 && len(lines) > n {
 			lines = lines[len(lines)-n:]
 		}
 		for _, l := range lines {
-			b.WriteString("  " + ui.Truncate(l, m.width-4) + "\n")
+			b.WriteString("  " + l + "\n")
 		}
-		if m.busyErr != nil {
-			b.WriteString("\n" + ui.Error.Render(m.busyErr.Error()) + "\n")
+		if m.busyErr != nil && !cancelled {
+			b.WriteString("\n" + ui.Error.Render(m.wrap(m.busyErr.Error(), 0)) + "\n")
 		}
-		if m.busyDone {
+		switch {
+		case m.busyDone && m.busyErr != nil && m.busyRetry != nil:
+			b.WriteString("\n" + ui.HelpBar(ui.K("l", "link again"), ui.K("enter", "continue")))
+		case m.busyDone:
 			b.WriteString("\n" + ui.HelpBar(ui.K("enter", "continue")))
+		case m.busyCanCancel:
+			b.WriteString("\n" + ui.HelpBar(ui.K("esc", "cancel")))
 		}
 		return b.String()
 	case scrLogs:
@@ -586,6 +650,10 @@ func (m *Model) render() string {
 			ui.HelpBar(ui.K("esc", "back"), ui.K("f", "follow"), ui.K("a", "all lines"), ui.K("/", "filter"))
 	case scrAccount:
 		return m.renderAccount()
+	case scrRuntime:
+		return m.renderRuntime()
+	case scrInfo:
+		return m.header() + "  " + ui.Bold.Render(m.infoTitle) + "\n\n" + m.infoText + "\n" + ui.HelpBar(ui.K("esc", "back"))
 	}
 	if m.App == nil {
 		msg := "Not set up yet."
@@ -601,30 +669,10 @@ func (m *Model) render() string {
 	if m.loadErr != nil {
 		body += "\n" + ui.Error.Render(m.loadErr.Error())
 	}
+	if !m.App.HasAccount() {
+		body += "\n" + ui.Warning.Render("The servers have no EchoVRCE sign-in yet: press ") + ui.KeyStyle.Render("c") + ui.Warning.Render(" to link this host.")
+	}
 	return m.header() + "\n\n" + body + "\n" + m.footer(
 		ui.K("enter", "console"), ui.K("s", "start"), ui.K("x", "stop"), ui.K("r", "restart"), ui.K("K", "kill"),
-		ui.K("a", "add"), ui.K("e", "edit"), ui.K("d", "delete"), ui.K("c", "account"), ui.K("S", "re-run setup"), ui.K("q", "quit"))
-}
-
-func (m *Model) renderAccount() string {
-	var b strings.Builder
-	b.WriteString(m.header() + "  " + ui.Bold.Render("account") + "\n\n")
-	a := m.account
-	switch {
-	case a == nil:
-		b.WriteString(m.spin.View() + " signing in …\n")
-	case a.err != nil:
-		b.WriteString(ui.Error.Render(a.err.Error()) + "\n")
-	default:
-		fmt.Fprintf(&b, "Signed in as %s; %s\n\n", ui.Bold.Render(a.session.Username), a.session.HostSummary())
-		for _, g := range a.session.HostGuilds() {
-			b.WriteString("  " + g + "\n")
-		}
-		fmt.Fprintf(&b, "\nThe backend lists %d registered server(s):\n", len(a.servers))
-		for _, s := range a.servers {
-			fmt.Fprintf(&b, "  %s  %-12s %s\n", s.CreatedAt.Local().Format(time.DateTime), s.Region, s.LobbyType)
-		}
-	}
-	b.WriteString("\n" + ui.Subtle.Render("Change the account with: evr-ptero account set --apply") + "\n")
-	return b.String() + m.footer(ui.K("r", "refresh"), ui.K("esc", "back"))
+		ui.K("a", "add"), ui.K("e", "edit"), ui.K("i", "reinstall"), ui.K("d", "delete"), ui.K("c", "account"), ui.K("m", "more"), ui.K("q", "quit"))
 }

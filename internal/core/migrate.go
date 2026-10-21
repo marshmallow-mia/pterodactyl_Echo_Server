@@ -61,7 +61,7 @@ func (a *App) LegacyServers(ctx context.Context) ([]LegacyServer, error) {
 // allocation, owner and limits. The account comes from evr-ptero's secrets.
 func (a *App) MigrateServers(ctx context.Context, list []LegacyServer, say func(string)) error {
 	if m := a.Secrets.MissingAccount(a.DeviceLinked()); len(m) > 0 {
-		return fmt.Errorf("set the account first (evr-ptero account set --from-game-dir …): %v missing", m)
+		return fmt.Errorf("%w (%v missing)", ErrNoAccount, m)
 	}
 	p := a.Panel()
 	for _, ls := range list {

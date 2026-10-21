@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -13,7 +12,6 @@ import (
 	"charm.land/huh/v2"
 
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/core"
-	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/egg"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/panel"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/panelinstall"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/pcfg"
@@ -71,20 +69,7 @@ func startWizard(m *Model) tea.Cmd {
 			return connectForm(m, hasLocal)
 		}
 		return m.Run("Writing the egg files", func(ctx context.Context, say func(string)) error {
-			for _, fm := range []string{"ptdl", "plcn"} {
-				b, err := egg.Render(fm, egg.Spec{Image: pcfg.DefaultImage, Version: core.Version})
-				if err != nil {
-					return err
-				}
-				name := map[string]string{"ptdl": "egg-echovr-nevr.json", "plcn": "egg-echovr-nevr.yaml"}[fm]
-				if err := os.WriteFile(name, append(b, '\n'), 0o644); err != nil {
-					return err
-				}
-				wd, _ := os.Getwd()
-				say("wrote " + wd + "/" + name)
-			}
-			say("Import the .json in Pterodactyl (Admin → Nests → Import Egg) or the .yaml in Pelican (Eggs → Import).")
-			return nil
+			return writeEggFiles(pcfg.DefaultImage, say)
 		}, func() tea.Cmd { return tea.Quit })
 	})
 }
@@ -118,21 +103,23 @@ func accountGroups(a *account) []*huh.Group {
 	}
 }
 
-// linkIfNoPassword runs the device link when no password was given.
+// linkIfNoPassword runs the device link when no password was given. If it
+// fails, the busy screen offers to try again.
 func linkIfNoPassword(ctx context.Context, app *core.App, a *account, say func(string)) error {
 	if a.signIn == "password" {
 		return nil
 	}
-	say("No password: linking this host at echovrce.com/device")
+	say("")
+	say("Linking this host at echovrce.com/device")
 	say(core.ResetPasswordNote)
-	s, err := app.LinkDevice(ctx, func(url, code string, expires time.Time) {
+	_, err := app.UseDeviceLink(ctx, func(url, code string, expires time.Time) {
 		say("Open " + url)
 		say("and approve the code " + code + " (valid until " + expires.Local().Format(time.TimeOnly) + ")")
-	})
+		say("waiting …")
+	}, say)
 	if err != nil {
-		return err
+		return linkFailed{fmt.Errorf("device link: %w", err)}
 	}
-	say(fmt.Sprintf("Linked as %s; %s", s.Username, s.HostSummary()))
 	return nil
 }
 

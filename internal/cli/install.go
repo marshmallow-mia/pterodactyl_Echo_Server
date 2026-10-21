@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -21,6 +22,7 @@ type installFlags struct {
 	bindIP, alias     string
 	ports             int
 	passwordStdin     bool
+	noLink            bool
 	account           struct{ discordID, httpKey, password string }
 }
 
@@ -54,6 +56,25 @@ func addInstallFlags(cmd *cobra.Command, f *installFlags) {
 	fl.StringVar(&f.account.discordID, "discord-id", "", "EchoVRCE host account Discord ID")
 	fl.StringVar(&f.account.httpKey, "http-key", "", "EchoVRCE backend HTTP key (default: the public key)")
 	fl.BoolVar(&f.passwordStdin, "password-stdin", false, "read the EchoVRCE password from stdin")
+	fl.BoolVar(&f.noLink, "no-link", false, "without a password: do not link this host at echovrce.com/device now")
+}
+
+// linkAfterSetup links the host at echovrce.com/device when the setup left the
+// servers without a sign-in, like the wizard does.
+func linkAfterSetup(cmd *cobra.Command, g *globals, app *core.App, noLink bool) error {
+	if app.HasAccount() {
+		return nil
+	}
+	if noLink {
+		g.say("No EchoVRCE sign-in yet. Link this host later with: evr-ptero account link")
+		return nil
+	}
+	g.say("\nNo password given: linking this host at echovrce.com/device (skip with --no-link).")
+	g.say("%s", core.ResetPasswordNote)
+	_, err := app.UseDeviceLink(cmd.Context(), func(url, code string, expires time.Time) {
+		g.say("Open %s and approve the code %s (valid until %s).", url, code, expires.Local().Format(time.TimeOnly))
+	}, func(s string) { g.say("%s", s) })
+	return err
 }
 
 func runInstall(cmd *cobra.Command, g *globals, f *installFlags) error {
@@ -85,8 +106,11 @@ func runInstall(cmd *cobra.Command, g *globals, f *installFlags) error {
 	o := core.SetupOptions{URL: res.URL, APIURL: res.APIURL, AppKey: res.AppKey, ClientKey: res.ClientKey, NodeID: res.NodeID, BindIP: bind, Alias: f.alias, Ports: f.ports}
 	o.Account.DiscordID, o.Account.HTTPKey, o.Account.Password = f.account.discordID, f.account.httpKey, f.account.password
 	g.say("")
-	_, err = core.Setup(cmd.Context(), g.dir, o, g.step)
-	return err
+	app, err := core.Setup(cmd.Context(), g.dir, o, g.step)
+	if err != nil {
+		return err
+	}
+	return linkAfterSetup(cmd, g, app, f.noLink)
 }
 
 func panelInstallCmds(g *globals, panel *cobra.Command) {
@@ -159,8 +183,11 @@ func initCmd(g *globals) *cobra.Command {
 					}
 					o.Account.Password = p
 				}
-				_, err := core.Setup(cmd.Context(), g.dir, o, g.step)
-				return err
+				app, err := core.Setup(cmd.Context(), g.dir, o, g.step)
+				if err != nil {
+					return err
+				}
+				return linkAfterSetup(cmd, g, app, f.noLink)
 			case "egg":
 				for _, fm := range []string{"ptdl", "plcn"} {
 					if err := writeEgg(fm, ""); err != nil {

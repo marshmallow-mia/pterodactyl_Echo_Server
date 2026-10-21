@@ -30,8 +30,9 @@ pre-release while there is no stable one; `EVR_VERSION=v2.0.0` picks one) and op
   an application API key, plus an admin account key so `evr-ptero` can start servers and show their console.
 - **Only write the egg files** to import by hand (see [Doing it yourself](#doing-it-yourself)).
 
-Then you sign in to EchoVRCE. Leave the password empty to link the host at echovrce.com/device: you approve a code and
-the Discord ID is filled in from your account. Or enter the server password and your Discord ID.
+Then you choose how the servers sign in to EchoVRCE: a device link at echovrce.com/device (no password; you approve a
+code and the Discord ID is filled in from your account), or your Discord ID and server password. If the link does not
+complete, press `l` to try again, or later `c` → `l` in the dashboard.
 
 `evr-ptero` then installs everything the panel needs for Echo VR:
 
@@ -92,13 +93,17 @@ version, and how many matches and restarts it has had.
 |---|---|
 | `enter` | live console from the panel (`f` follow, `a` show runtime noise, `/` filter) |
 | `s` / `x` / `r` / `K` | start / stop / restart / kill |
-| `a` / `e` / `d` | add servers / edit one (regions, guilds, tick rate, runtime pin) / delete |
-| `c` | account: sign-in state, servers the backend has registered, device link |
-| `S` | run the setup again (egg, mounts, allocations) |
+| `a` / `e` / `d` | add servers / edit one (regions, guilds, tick rate, empty TTL, runtime pin) / delete |
+| `i` | reinstall a server (runs the egg's install step again) |
+| `c` | account: sign-in state and registered servers; `l` links this host at echovrce.com/device, `p` signs in with a password |
+| `m` | more: runtime versions and updates, Discord alerts and the background service, moving servers from an old Echo egg, the panel connection, re-running the setup, the egg files, uninstalling the panel |
+
+A running device link can be cancelled with `esc`, and a failed one retried with `l`.
 
 ## Commands
 
-Everything in the dashboard is also a command. Add `--json` for scripts and `-y` to skip confirmations.
+Everything in the dashboard is also a command, and every command is also in the dashboard. Add `--json` for scripts and
+`-y` to skip confirmations.
 
 ```
 evr-ptero init                          guided setup; with flags unattended (init --help)
@@ -110,10 +115,10 @@ evr-ptero server edit NAME --tick-rate 90 --regions euw,default
 evr-ptero server start|stop|restart|kill NAME…
 evr-ptero server logs NAME               follow the console
 evr-ptero server reinstall|rm NAME
-evr-ptero account link|set|test|servers  device link (no password) or password sign-in
-evr-ptero runtime ls|use TAG|rollback
+evr-ptero account link|set|test|servers  device link (no password) or password sign-in; updates every server
+evr-ptero runtime ls|use TAG|rollback|remove TAG
 evr-ptero update check|apply             new nevr-runtime: canary on an idle server, then switch
-evr-ptero agent install|run|webhook URL  metrics, Discord alerts, automatic runtime updates
+evr-ptero agent install|uninstall|run|webhook URL  metrics, Discord alerts, automatic runtime updates
 evr-ptero files install                  game and runtime into a directory
 evr-ptero egg export --format ptdl|plcn  the egg for importing by hand
 evr-ptero migrate detect|run             move servers from the old Echo egg
@@ -126,19 +131,25 @@ sudo evr-ptero init --mode install --product pelican --fqdn panel.example.org --
     --tls proxy --email you@example.org --ports 10
 ```
 
+Without `--password-stdin` the setup ends with the device link and prints the code to approve, like the wizard
+(`--no-link` skips it).
+
 ## Updates, alerts and metrics
 
-`sudo evr-ptero agent install` runs a small background service on the node:
+A small background service on the node (dashboard: `m` → Discord alerts and the background service, or
+`sudo evr-ptero agent install`) does three things:
 
 - **Runtime updates.** New nevr-runtime releases are installed into the shared files and tried on one idle server
   first. Only if that server registers does `current` switch; the other servers switch at their next match boundary.
   A version that fails is skipped.
-- **Discord alerts.** `evr-ptero agent webhook https://discord.com/api/webhooks/…` sends a test message. You then get
+- **Discord alerts.** Enter a webhook URL in the same dashboard form (or `evr-ptero agent webhook https://discord.com/api/webhooks/…`)
+  and a test message is sent. You then get
   alerts when a server stops on an error, keeps restarting, stays down or recovers, and when an update is rolled out
   or rolled back.
 - **Prometheus metrics** on `127.0.0.1:9470/metrics`.
 
-To update `evr-ptero` itself, run the installer again, then `sudo evr-ptero panel setup`. Each version uses the image
+To update `evr-ptero` itself, run the installer again, then re-run the setup (`m` → Re-run the panel setup, or
+`sudo evr-ptero panel setup`). Each version uses the image
 released with it (`echovr-pterodactyl:<version>`), and the setup moves the egg and the servers to it. A server uses the
 new image from its next restart.
 
@@ -161,7 +172,8 @@ new image from its next restart.
 ## Moving from v1
 
 The old guide and egg are kept on the [`v1`](https://github.com/marshmallow-mia/pterodactyl_Echo_Server/tree/v1) branch.
-On the panel host:
+On the panel host, run `sudo evr-ptero`, connect to the panel and sign in, then `m` → Move servers from an old Echo egg
+and pick the servers. The same with commands:
 
 ```sh
 sudo evr-ptero init                 # connect to the panel, sign in
