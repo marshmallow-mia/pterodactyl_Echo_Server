@@ -5,14 +5,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/config"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/notify"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/update"
+	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/agent"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/core"
+	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/pcfg"
 )
 
 // legacyCredentials reads the account from an old game directory: config.yaml
@@ -160,5 +166,108 @@ func migrateCmd(g *globals) *cobra.Command {
 		},
 	}
 	cmd.AddCommand(run)
+	return cmd
+}
+
+func agentCmd(g *globals) *cobra.Command {
+	cmd := &cobra.Command{Use: "agent", Short: "Background service: metrics, Discord alerts, runtime updates"}
+	cmd.AddCommand(&cobra.Command{
+		Use: "run", Short: "Run in the foreground (systemd runs this)",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			l := log.New(os.Stderr, "", 0)
+			return (&agent.Agent{Dir: g.dir, Log: func(s string) { l.Println(s) }}).Run(cmd.Context())
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use: "install", Short: "Install and start the agent as a systemd service",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			exe, err := os.Executable()
+			if err != nil {
+				return err
+			}
+			if exe, err = filepath.EvalSymlinks(exe); err != nil {
+				return err
+			}
+			unit := fmt.Sprintf("[Unit]\nDescription=evr-ptero agent (Echo VR server metrics, alerts, updates)\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nExecStart=%s --config-dir %s agent run\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=multi-user.target\n", exe, g.dir)
+			if err := os.WriteFile("/etc/systemd/system/evr-ptero-agent.service", []byte(unit), 0o644); err != nil {
+				return err
+			}
+			for _, args := range [][]string{{"daemon-reload"}, {"enable", "evr-ptero-agent.service"}, {"restart", "evr-ptero-agent.service"}} {
+				if out, err := exec.Command("systemctl", args...).CombinedOutput(); err != nil {
+					return fmt.Errorf("systemctl %v: %v: %s", args, err, out)
+				}
+			}
+			g.say("evr-ptero-agent installed and started")
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use: "webhook [URL|off]", Short: "Set (or test) the Discord webhook for alerts", Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			a, err := g.app()
+			if err != nil {
+				return err
+			}
+			if len(args) == 1 {
+				if args[0] == "off" {
+					delete(a.Secrets, pcfg.SecretWebhook)
+				} else {
+					a.Secrets[pcfg.SecretWebhook] = args[0]
+				}
+				if err := a.Secrets.Save(a.Dir); err != nil {
+					return err
+				}
+			}
+			if a.Secrets[pcfg.SecretWebhook] == "" {
+				g.say("Discord alerts are off")
+				return nil
+			}
+			host, _ := os.Hostname()
+			if err := (&notify.Notifier{URL: a.Secrets[pcfg.SecretWebhook]}).Send(cmd.Context(), notify.Event{Kind: "test", Level: notify.Info, Host: host,
+				Title: "evr-ptero alerts are set up", Text: "This channel will get alerts about the Echo VR servers in " + a.Cfg.Panel.URL + "."}); err != nil {
+				return err
+			}
+			g.say("test message sent")
+			return nil
+		},
+	})
+	return cmd
+}
+
+func updateCmd(g *globals) *cobra.Command {
+	cmd := &cobra.Command{Use: "update", Short: "Check for and roll out nevr-runtime updates on the node"}
+	cmd.AddCommand(&cobra.Command{
+		Use: "check", Short: "Is a newer runtime available?",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			a, err := g.app()
+			if err != nil {
+				return err
+			}
+			cur, target, available, err := agent.Updater(a, nil).Check(cmd.Context(), update.Policy{Channel: a.Cfg.Runtime.Channel, Pinned: a.Cfg.Runtime.Pinned})
+			if err != nil {
+				return err
+			}
+			if available {
+				g.say("nevr-runtime %s is available (current %s); roll it out with: evr-ptero update apply", target.Tag, cur)
+			} else {
+				g.say("up to date (%s)", cur)
+			}
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use: "apply", Short: "Canary on an idle server, then switch the node's current runtime",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			a, err := g.app()
+			if err != nil {
+				return err
+			}
+			res, err := agent.Updater(a, func(s string) { g.say("%s", s) }).Run(cmd.Context(), update.Policy{Channel: a.Cfg.Runtime.Channel, Pinned: a.Cfg.Runtime.Pinned})
+			if err != nil {
+				return err
+			}
+			return g.print(res, func(w io.Writer) { fmt.Fprintf(w, "%s: %s → %s %s\n", res.Action, res.From, res.To, res.Detail) })
+		},
+	})
 	return cmd
 }
