@@ -3,6 +3,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/game"
@@ -82,10 +84,93 @@ func (a *App) Auth() *auth.Client {
 
 // Login checks the EchoVRCE account.
 func (a *App) Login(ctx context.Context) (auth.Session, error) {
-	if m := a.Secrets.MissingAccount(); len(m) > 0 {
+	if m := a.Secrets.MissingAccount(a.DeviceLinked()); len(m) > 0 {
 		return auth.Session{}, fmt.Errorf("account not configured: %v missing (run: evr-ptero account set)", m)
 	}
+	if a.Secrets[config.EnvPassword] == "" {
+		return a.refreshDevice(ctx)
+	}
 	return a.Auth().Login(ctx, a.Secrets[config.EnvDiscordID], a.Secrets[config.EnvPassword])
+}
+
+func (a *App) devicePath() string { return filepath.Join(a.Dir, pcfg.DeviceFile) }
+
+// DeviceLinked reports whether `account link` stored a device link.
+func (a *App) DeviceLinked() bool {
+	_, err := os.Stat(a.devicePath())
+	return err == nil
+}
+
+// LinkDevice runs the echovrce.com/device flow and stores the refresh token.
+func (a *App) LinkDevice(ctx context.Context, show func(url, code string, expires time.Time)) (auth.Session, error) {
+	c := a.Auth()
+	code, err := c.RequestDevice(ctx)
+	if err != nil {
+		return auth.Session{}, err
+	}
+	show(code.URL(), code.Code, code.Expires)
+	wctx, cancel := context.WithDeadline(ctx, code.Expires)
+	defer cancel()
+	linked, err := c.WaitDevice(wctx, code, 0)
+	if err != nil {
+		return auth.Session{}, err
+	}
+	if err := auth.WriteCredentials(a.devicePath(), linked); err != nil {
+		return auth.Session{}, err
+	}
+	return linked.Session, nil
+}
+
+// refreshDevice signs in with the stored device link and saves the rotated token.
+func (a *App) refreshDevice(ctx context.Context) (auth.Session, error) {
+	b, err := os.ReadFile(a.devicePath())
+	if err != nil {
+		return auth.Session{}, fmt.Errorf("no password and no device link (run: evr-ptero account link): %w", err)
+	}
+	var cred struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.Unmarshal(b, &cred); err != nil || cred.RefreshToken == "" {
+		return auth.Session{}, fmt.Errorf("%s is not a device link", a.devicePath())
+	}
+	linked, err := a.Auth().Refresh(ctx, cred.RefreshToken)
+	if err != nil {
+		return auth.Session{}, err
+	}
+	if err := auth.WriteCredentials(a.devicePath(), linked); err != nil {
+		return auth.Session{}, err
+	}
+	return linked.Session, nil
+}
+
+// installDeviceLink copies the device link into a server's volume, where the
+// runtime looks for it (_local/.credentials.json). Needs Wings on this host.
+func (a *App) installDeviceLink(s panel.Server) error {
+	if !a.DeviceLinked() {
+		return nil
+	}
+	vol := filepath.Join(a.Cfg.Panel.WingsData, s.UUID)
+	fi, err := os.Stat(vol)
+	if err != nil {
+		return fmt.Errorf("server volume %s not found (Wings must run on this host to copy the device link): %w", vol, err)
+	}
+	b, err := os.ReadFile(a.devicePath())
+	if err != nil {
+		return err
+	}
+	dst := filepath.Join(vol, "root", "_local", ".credentials.json")
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(dst, b, 0o600); err != nil {
+		return err
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		for _, p := range []string{filepath.Join(vol, "root"), filepath.Join(vol, "root", "_local"), dst} {
+			_ = os.Chown(p, int(st.Uid), int(st.Gid))
+		}
+	}
+	return nil
 }
 
 // InstallFiles puts the game and the runtime into dir (dir/game, dir/nevr).
@@ -306,7 +391,7 @@ func (a *App) CreateServers(ctx context.Context, n int, set instance.Settings, s
 	if a.Cfg.Panel.EggID == 0 || a.Cfg.Panel.NodeID == 0 {
 		return nil, errors.New("the panel is not set up yet (run: evr-ptero panel setup)")
 	}
-	if m := a.Secrets.MissingAccount(); len(m) > 0 {
+	if m := a.Secrets.MissingAccount(a.DeviceLinked()); len(m) > 0 {
 		return nil, fmt.Errorf("account not configured: %v missing", m)
 	}
 	set = a.Cfg.Defaults.Merge(set)
@@ -394,6 +479,14 @@ func (a *App) startWhenInstalled(ctx context.Context, s panel.Server, say func(s
 		}
 		if say != nil {
 			say(s.Name + ": shared game files attached")
+		}
+	}
+	if a.DeviceLinked() {
+		if err := a.installDeviceLink(s); err != nil {
+			return err
+		}
+		if say != nil {
+			say(s.Name + ": device link installed")
 		}
 	}
 	if a.Secrets[pcfg.SecretClientKey] == "" {
