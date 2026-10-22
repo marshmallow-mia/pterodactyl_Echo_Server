@@ -103,6 +103,7 @@ type Model struct {
 
 	// legacy are old-egg servers the dashboard points at; scanned once.
 	legacy        []core.LegacyServer
+	serversLoaded bool // the server list arrived since the last reset
 	legacyScanned bool // scan started
 	legacyChecked bool // scan result arrived
 	legacyOffered bool // move form opened by itself once
@@ -272,6 +273,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tick()
 	case serversMsg:
 		m.servers, m.loadErr = msg.list, msg.err
+		m.serversLoaded = true
 		m.refresh()
 		if !m.legacyScanned && msg.err == nil && m.App != nil {
 			m.legacyScanned = true
@@ -721,6 +723,8 @@ func (m *Model) render() string {
 	body := m.table.View()
 	switch {
 	case len(m.servers) > 0:
+	case !m.serversLoaded && m.loadErr == nil:
+		body = ui.Subtle.Render("Loading servers …")
 	case len(m.legacy) > 0:
 		body = ui.Subtle.Render(fmt.Sprintf("No nevr-runtime servers yet; %d server(s) are still on an old Echo egg. Press ", len(m.legacy))) +
 			ui.KeyStyle.Render("M") + ui.Subtle.Render(" to move them.")

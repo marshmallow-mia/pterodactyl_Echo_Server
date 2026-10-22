@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -325,14 +326,24 @@ func (a *App) Servers(ctx context.Context) ([]Server, error) {
 		if st, err := status.Read(filepath.Join(a.Cfg.Panel.WingsData, s.UUID, status.FileName)); err == nil {
 			sv.Status = &st
 		}
-		if a.Secrets[pcfg.SecretClientKey] != "" {
-			rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			if r, err := p.Resources(rctx, s.Identifier); err == nil {
-				sv.Power = r.State
-			}
-			cancel()
-		}
 		out = append(out, sv)
+	}
+	// Power states come from Wings, which answers slowly for servers that
+	// are installing; ask for all of them at once, briefly.
+	if a.Secrets[pcfg.SecretClientKey] != "" {
+		var wg sync.WaitGroup
+		for i := range out {
+			wg.Add(1)
+			go func(sv *Server) {
+				defer wg.Done()
+				rctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+				defer cancel()
+				if r, err := p.Resources(rctx, sv.Panel.Identifier); err == nil {
+					sv.Power = r.State
+				}
+			}(&out[i])
+		}
+		wg.Wait()
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].Port < out[j].Port || out[i].Port == out[j].Port && out[i].Name() < out[j].Name()

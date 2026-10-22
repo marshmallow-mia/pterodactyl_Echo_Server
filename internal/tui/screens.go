@@ -700,7 +700,8 @@ func (m *Model) migrateForm(msg legacyMsg) tea.Cmd {
 				}
 				return app.MigrateServers(ctx, sel, files, opts, say)
 			}, func() tea.Cmd {
-				m.legacy = nil
+				// Until both answer, the dashboard says it is loading rather than "press a".
+				m.legacy, m.serversLoaded, m.legacyChecked = nil, false, false
 				return tea.Batch(m.LoadServers(), m.scanLegacy())
 			})
 			m.busyCanCancel = needAccount && acct == "link"
