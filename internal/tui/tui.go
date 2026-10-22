@@ -103,7 +103,9 @@ type Model struct {
 
 	// legacy are old-egg servers the dashboard points at; scanned once.
 	legacy        []core.LegacyServer
-	legacyScanned bool
+	legacyScanned bool // scan started
+	legacyChecked bool // scan result arrived
+	legacyOffered bool // move form opened by itself once
 
 	confirm       string
 	confirmFunc   func() tea.Cmd
@@ -296,7 +298,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case legacyMsg:
 		return m, m.migrateForm(msg)
 	case legacyScanMsg:
-		m.legacy = msg
+		m.legacy, m.legacyChecked = msg, true
+		// Nothing of ours yet but old servers: moving them is the next step.
+		if len(msg) > 0 && len(m.servers) == 0 && m.screen == scrDashboard && !m.legacyOffered {
+			m.legacyOffered = true
+			return m, m.migrateForm(legacyMsg{list: msg})
+		}
 		return m, nil
 	case versionsMsg:
 		return m, m.applyForm(msg)
@@ -557,11 +564,16 @@ func split(s string) []string {
 
 func (m *Model) addForm() tea.Cmd {
 	count, regions, guilds := "1", strings.Join(m.App.Cfg.Defaults.Regions, ","), strings.Join(m.App.Cfg.Defaults.Guilds, ",")
-	f := huh.NewForm(huh.NewGroup(
+	var fields []huh.Field
+	if n := len(m.legacy); n > 0 {
+		fields = append(fields, huh.NewNote().Title("Old servers").
+			Description(fmt.Sprintf("%d server(s) are still on an old Echo egg. New servers are added next to them;\nto replace the old ones on their ports instead, press esc and then M.", n)))
+	}
+	f := huh.NewForm(huh.NewGroup(append(fields,
 		huh.NewInput().Title("How many servers?").Description("They get free ports on the node and start after installing.").Value(&count).Validate(intRange(1, 32)),
 		huh.NewInput().Title("Regions (optional)").Description("Comma-separated, e.g. euw,default.").Value(&regions),
 		huh.NewInput().Title("Guilds (optional)").Description("Guild IDs to host for; empty = all the account may host.").Value(&guilds),
-	).Title("Add Echo VR servers"))
+	)...).Title("Add Echo VR servers"))
 	app := m.App
 	return m.ShowForm(f, func() tea.Cmd {
 		n, _ := strconv.Atoi(count)
@@ -707,14 +719,21 @@ func (m *Model) render() string {
 		return m.header() + "\n\n" + msg + "\n\n" + ui.HelpBar(ui.K("q", "quit"))
 	}
 	body := m.table.View()
-	if len(m.servers) == 0 {
+	switch {
+	case len(m.servers) > 0:
+	case len(m.legacy) > 0:
+		body = ui.Subtle.Render(fmt.Sprintf("No nevr-runtime servers yet; %d server(s) are still on an old Echo egg. Press ", len(m.legacy))) +
+			ui.KeyStyle.Render("M") + ui.Subtle.Render(" to move them.")
+	case !m.legacyChecked:
+		body = ui.Subtle.Render("No nevr-runtime servers yet. Looking for servers on an old Echo egg …")
+	default:
 		body = ui.Subtle.Render("No Echo VR servers in the panel yet. Press ") + ui.KeyStyle.Render("a") + ui.Subtle.Render(" to create some.")
 	}
 	if m.loadErr != nil {
 		body += "\n" + ui.Error.Render(m.loadErr.Error())
 	}
 	body += m.updatesNotice()
-	if n := len(m.legacy); n > 0 {
+	if n := len(m.legacy); n > 0 && len(m.servers) > 0 {
 		body += "\n" + ui.Warning.Render(fmt.Sprintf("%d server(s) still on an old Echo egg: press ", n)) + ui.KeyStyle.Render("M") + ui.Warning.Render(" to move them")
 	}
 	if !m.App.HasAccount() {

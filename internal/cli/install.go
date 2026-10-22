@@ -62,19 +62,25 @@ func addInstallFlags(cmd *cobra.Command, f *installFlags) {
 // linkAfterSetup links the host at echovrce.com/device when the setup left the
 // servers without a sign-in, like the wizard does.
 func linkAfterSetup(cmd *cobra.Command, g *globals, app *core.App, noLink bool) error {
-	if app.HasAccount() {
-		return nil
-	}
-	if noLink {
+	switch {
+	case app.HasAccount():
+	case noLink:
 		g.say("No EchoVRCE sign-in yet. Link this host later with: evr-ptero account link")
-		return nil
+	default:
+		g.say("\nNo password given: linking this host at echovrce.com/device (skip with --no-link).")
+		g.say("%s", core.ResetPasswordNote)
+		_, err := app.UseDeviceLink(cmd.Context(), func(url, code string, expires time.Time) {
+			g.say("Open %s and approve the code %s (valid until %s).", url, code, expires.Local().Format(time.TimeOnly))
+		}, func(s string) { g.say("%s", s) })
+		if err != nil {
+			return err
+		}
 	}
-	g.say("\nNo password given: linking this host at echovrce.com/device (skip with --no-link).")
-	g.say("%s", core.ResetPasswordNote)
-	_, err := app.UseDeviceLink(cmd.Context(), func(url, code string, expires time.Time) {
-		g.say("Open %s and approve the code %s (valid until %s).", url, code, expires.Local().Format(time.TimeOnly))
-	}, func(s string) { g.say("%s", s) })
-	return err
+	// Old servers are the next step: moving them, not creating new ones.
+	if list, err := app.LegacyServers(cmd.Context()); err == nil && len(list) > 0 {
+		g.say("\n%d server(s) are still on an old Echo egg. Move them to nevr-runtime on their ports with:\n  evr-ptero migrate run", len(list))
+	}
+	return nil
 }
 
 func runInstall(cmd *cobra.Command, g *globals, f *installFlags) error {

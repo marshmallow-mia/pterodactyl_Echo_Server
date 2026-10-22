@@ -541,7 +541,7 @@ func (m *Model) scanLegacy() tea.Cmd {
 		defer cancel()
 		list, err := app.LegacyServers(ctx)
 		if err != nil {
-			return nil
+			return legacyScanMsg(nil)
 		}
 		return legacyScanMsg(app.UnhiddenLegacy(list))
 	}
