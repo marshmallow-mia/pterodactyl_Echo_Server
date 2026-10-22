@@ -6,10 +6,13 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/game"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/updates"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/agent"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/core"
@@ -85,6 +88,8 @@ func runtimeCmd(g *globals) *cobra.Command {
 
 func migrateCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{Use: "migrate", Short: "Move servers from an old Echo egg to the nevr-runtime egg"}
+	var mode, logs string
+	var remove []string
 	detect := &cobra.Command{
 		Use: "detect", Short: "List servers that use another Echo VR egg",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -105,6 +110,13 @@ func migrateCmd(g *globals) *cobra.Command {
 				for _, s := range list {
 					fmt.Fprintf(w, "  %-24s %s  egg %q  port %d\n", s.Server.Name, s.Server.Identifier, s.EggName, s.Port)
 				}
+				files := a.FindLegacyFiles()
+				if files.GameDir != "" {
+					fmt.Fprintf(w, "Old game folder: %s (logs %s)\n", files.GameDir, game.Size(files.LogsSize))
+				}
+				if files.ScriptsDir != "" {
+					fmt.Fprintf(w, "Old scripts: %s\n", files.ScriptsDir)
+				}
 				switch {
 				case a.HasAccount():
 				case found:
@@ -117,7 +129,7 @@ func migrateCmd(g *globals) *cobra.Command {
 	}
 	cmd.AddCommand(detect)
 	run := &cobra.Command{
-		Use: "run [SERVER...]", Short: "Switch servers to the new egg, image and shared files (same allocation), then restart them",
+		Use: "run [SERVER...]", Short: "Replace servers on an old Echo egg with nevr-runtime servers on the same ports",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := g.app()
 			if err != nil {
@@ -143,7 +155,41 @@ func migrateCmd(g *globals) *cobra.Command {
 			for _, s := range sel {
 				g.say("  %s (%s, port %d)", s.Server.Name, s.Server.Identifier, s.Port)
 			}
-			if !g.confirm(fmt.Sprintf("Migrate these %d server(s)? They restart once.", len(sel))) {
+			files := a.FindLegacyFiles()
+			opts := core.MigrateOptions{Mode: mode, Logs: logs, Remove: remove}
+			interactive := !g.yes && term.IsTerminal(int(os.Stdin.Fd()))
+			if opts.Mode == "" && interactive {
+				g.say("")
+				for i, m := range core.MigrateModes {
+					g.say("%d) %s\n   %s\n", i+1, m.Title, m.Explain)
+				}
+				fmt.Fprint(g.out, "How should the servers be moved? [1/2] ")
+				var n int
+				fmt.Scanln(&n)
+				if n < 1 || n > len(core.MigrateModes) {
+					return errors.New("cancelled")
+				}
+				opts.Mode = core.MigrateModes[n-1].Key
+			}
+			if opts.Mode == "" {
+				return errors.New("--mode recreate or --mode keep is required (see migrate run --help)")
+			}
+			if files.GameDir != "" {
+				g.say("Old logs: %s (%s) are moved to %s unless --logs says otherwise",
+					filepath.Join(files.GameDir, "logs"), game.Size(files.LogsSize), filepath.Join(a.Cfg.DataDir, game.V1LogsDir))
+			}
+			// Deleting is never implied by --yes: without --remove, ask for each part.
+			if !cmd.Flags().Changed("remove") && interactive {
+				for _, r := range a.Removable(sel, files) {
+					if g.confirm(fmt.Sprintf("After the move, delete %s?", r.What)) {
+						opts.Remove = append(opts.Remove, r.Key)
+					}
+				}
+			}
+			if err := opts.Validate(); err != nil {
+				return err
+			}
+			if !g.confirm(fmt.Sprintf("Move these %d server(s) now?", len(sel))) {
 				return errors.New("cancelled (use --yes)")
 			}
 			if !a.HasAccount() {
@@ -155,9 +201,12 @@ func migrateCmd(g *globals) *cobra.Command {
 					return err
 				}
 			}
-			return a.MigrateServers(cmd.Context(), sel, func(s string) { g.say("%s", s) })
+			return a.MigrateServers(cmd.Context(), sel, files, opts, func(s string) { g.say("%s", s) })
 		},
 	}
+	run.Flags().StringVar(&mode, "mode", "", "recreate: delete each old server and create a new one on its port; keep: keep the panel server and replace its egg, image and mounts (asked when omitted)")
+	run.Flags().StringVar(&logs, "logs", core.LogsMove, "old logs: move (to <data dir>/"+game.V1LogsDir+"), keep or delete")
+	run.Flags().StringSliceVar(&remove, "remove", nil, "also delete, after the move: scripts, game, panel (old egg and mounts); asked for each when omitted")
 	cmd.AddCommand(run)
 	return cmd
 }

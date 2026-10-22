@@ -406,6 +406,21 @@ func orStr(v, d string) string {
 	return v
 }
 
+// serverSpec describes a new Echo VR server on the nevr-runtime egg.
+func (a *App) serverSpec(name string, owner, allocation int, set instance.Settings) panel.ServerSpec {
+	disk := a.Cfg.Resources.DiskMB
+	if a.Cfg.GameSource == "download" && disk < 8192 {
+		disk = 8192
+	}
+	return panel.ServerSpec{
+		Name: name, Description: "Echo VR dedicated server (nevr-runtime), managed by evr-ptero",
+		User: owner, Egg: a.Cfg.Panel.EggID, Image: a.Cfg.Image, Startup: "evr-supervisor",
+		Env: a.Env(set, a.Cfg.GameSource), Allocation: allocation,
+		MemoryMB: a.Cfg.Resources.MemoryMB, DiskMB: disk, CPU: a.Cfg.Resources.CPU,
+		StartAfterInstall: false,
+	}
+}
+
 // CreateServers creates n Echo VR servers on free allocations of the node.
 func (a *App) CreateServers(ctx context.Context, n int, set instance.Settings, say func(string)) ([]panel.Server, error) {
 	if a.Cfg.Panel.EggID == 0 || a.Cfg.Panel.NodeID == 0 {
@@ -444,17 +459,7 @@ func (a *App) CreateServers(ctx context.Context, n int, set instance.Settings, s
 		}
 		name := fmt.Sprintf("Echo VR %d", k)
 		names[name] = true
-		disk := a.Cfg.Resources.DiskMB
-		if a.Cfg.GameSource == "download" && disk < 8192 {
-			disk = 8192
-		}
-		s, err := p.CreateServer(ctx, panel.ServerSpec{
-			Name: name, Description: "Echo VR dedicated server (nevr-runtime), managed by evr-ptero",
-			User: a.Cfg.Panel.OwnerID, Egg: a.Cfg.Panel.EggID, Image: a.Cfg.Image, Startup: "evr-supervisor",
-			Env: a.Env(set, a.Cfg.GameSource), Allocation: alloc.ID,
-			MemoryMB: a.Cfg.Resources.MemoryMB, DiskMB: disk, CPU: a.Cfg.Resources.CPU,
-			StartAfterInstall: false,
-		})
+		s, err := p.CreateServer(ctx, a.serverSpec(name, a.Cfg.Panel.OwnerID, alloc.ID, set))
 		if err != nil {
 			return created, fmt.Errorf("creating %s: %w", name, err)
 		}

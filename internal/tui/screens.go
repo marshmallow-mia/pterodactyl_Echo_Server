@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/game"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/config"
 	ui "github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/tui"
@@ -563,15 +564,61 @@ func (m *Model) migrateForm(msg legacyMsg) tea.Cmd {
 	}
 	var picked []string
 	action := "move"
-	fields := []huh.Field{
+	first := huh.NewGroup(
 		huh.NewMultiSelect[string]().Title("Servers to move to the nevr-runtime egg").
-			Description("Nothing is reinstalled: each keeps its allocation, owner and limits, gets this host's account and the shared game files, and restarts once.").
-			Options(opts...).Height(min(len(opts), 8) + 4).Value(&picked).Validate(func(v []string) error {
+			Description("Each gets this host's account, the shared game files and nevr-runtime, on the same port.").
+			Options(opts...).Height(min(len(opts), 8)+4).Value(&picked).Validate(func(v []string) error {
 			if len(v) == 0 && action == "move" {
 				return errors.New("pick at least one server")
 			}
 			return nil
 		}),
+		huh.NewSelect[string]().Title("Move them now?").Options(
+			huh.NewOption("Move now", "move"),
+			huh.NewOption("Not now", "later"),
+			huh.NewOption("Not now, and stop pointing at these servers on the dashboard", "hide"),
+		).Value(&action),
+	).Title("Move servers from an old Echo egg")
+	notMoving := func() bool { return action != "move" }
+
+	// How: recreate or keep, explained; the old logs; what to delete.
+	mode := core.MigrateRecreate
+	var modeOpts []huh.Option[string]
+	explain := map[string]string{}
+	for _, md := range core.MigrateModes {
+		modeOpts = append(modeOpts, huh.NewOption(md.Title, md.Key))
+		explain[md.Key] = md.Explain
+	}
+	files := app.FindLegacyFiles()
+	logs := core.LogsMove
+	var remove []string
+	what := map[string]string{}
+	var ropts []huh.Option[string]
+	for _, r := range app.Removable(msg.list, files) {
+		ropts = append(ropts, huh.NewOption(r.What, r.Key))
+		what[r.Key] = r.What
+	}
+	how := []huh.Field{
+		huh.NewSelect[string]().Title("How should they be moved?").Options(modeOpts...).Value(&mode).
+			DescriptionFunc(func() string { return explain[mode] }, &mode),
+	}
+	if files.GameDir != "" {
+		how = append(how, huh.NewSelect[string]().Title("Old logs ("+game.Size(files.LogsSize)+" in "+filepath.Join(files.GameDir, "logs")+")").Options(
+			huh.NewOption("Move them to "+filepath.Join(app.Cfg.DataDir, game.V1LogsDir), core.LogsMove),
+			huh.NewOption("Keep them in the old game folder", core.LogsKeep),
+			huh.NewOption("Delete them", core.LogsDelete),
+		).Value(&logs))
+	}
+	if len(ropts) > 0 {
+		how = append(how, huh.NewMultiSelect[string]().Title("Also delete, once the servers are moved").
+			Description("Nothing is deleted unless you pick it here.").Options(ropts...).Height(len(ropts)+5).Value(&remove).
+			Validate(func(v []string) error {
+				return core.MigrateOptions{Mode: mode, Logs: logs, Remove: v}.Validate()
+			}))
+	}
+	groups := []*huh.Group{
+		first,
+		huh.NewGroup(how...).Title("How").WithHideFunc(notMoving),
 	}
 
 	// Without an account the move signs in first, preferably with the one the old servers used.
@@ -592,21 +639,13 @@ func (m *Model) migrateForm(msg legacyMsg) tea.Cmd {
 		if acct == "" {
 			acct = "link"
 		}
-		fields = append(fields,
-			huh.NewSelect[string]().Title("EchoVRCE account for the moved servers").Options(aopts...).Value(&acct),
-		)
-	}
-	fields = append(fields, huh.NewSelect[string]().Title("Move them now?").Description("The old egg and game folders are left alone.").Options(
-		huh.NewOption("Move now", "move"),
-		huh.NewOption("Not now", "later"),
-		huh.NewOption("Not now, and stop pointing at these servers on the dashboard", "hide"),
-	).Value(&action))
-	groups := []*huh.Group{huh.NewGroup(fields...).Title("Move servers from an old Echo egg")}
-	if needAccount {
-		groups = append(groups, huh.NewGroup(
-			huh.NewInput().Title("Discord user ID").Description("Discord → Settings → Advanced → Developer mode, then copy your ID.").Value(&discordID).Validate(digits),
-			huh.NewInput().Title("Server password").Description("The password you set for hosting with the EchoVRCE bot.").EchoMode(huh.EchoModePassword).Value(&password).Validate(required("the password")),
-		).Title("Password sign-in").WithHideFunc(func() bool { return action != "move" || acct != "password" }))
+		groups = append(groups,
+			huh.NewGroup(huh.NewSelect[string]().Title("EchoVRCE account for the moved servers").Options(aopts...).Value(&acct)).
+				WithHideFunc(notMoving),
+			huh.NewGroup(
+				huh.NewInput().Title("Discord user ID").Description("Discord → Settings → Advanced → Developer mode, then copy your ID.").Value(&discordID).Validate(digits),
+				huh.NewInput().Title("Server password").Description("The password you set for hosting with the EchoVRCE bot.").EchoMode(huh.EchoModePassword).Value(&password).Validate(required("the password")),
+			).Title("Password sign-in").WithHideFunc(func() bool { return notMoving() || acct != "password" }))
 	}
 	return m.ShowForm(huh.NewForm(groups...), func() tea.Cmd {
 		switch action {
@@ -632,36 +671,62 @@ func (m *Model) migrateForm(msg legacyMsg) tea.Cmd {
 				sel = append(sel, s)
 			}
 		}
-		cmd := m.Run(fmt.Sprintf("Moving %d server(s)", len(sel)), func(ctx context.Context, say func(string)) error {
-			if needAccount {
-				var err error
-				switch acct {
-				case "legacy":
-					err = app.UseLegacyAccount(ctx, old, say)
-				case "password":
-					_, err = app.UsePassword(ctx, discordID, password, say)
-				case "link":
-					say(core.ResetPasswordNote)
+		start := func(sure bool) tea.Cmd {
+			cmd := m.Run(fmt.Sprintf("Moving %d server(s)", len(sel)), func(ctx context.Context, say func(string)) error {
+				if needAccount {
+					var err error
+					switch acct {
+					case "legacy":
+						err = app.UseLegacyAccount(ctx, old, say)
+					case "password":
+						_, err = app.UsePassword(ctx, discordID, password, say)
+					case "link":
+						say(core.ResetPasswordNote)
+						say("")
+						_, err = app.UseDeviceLink(ctx, func(url, code string, expires time.Time) {
+							say("Open " + url)
+							say("and approve the code " + code + " (valid until " + expires.Local().Format(time.TimeOnly) + ")")
+							say("waiting …")
+						}, say)
+					}
+					if err != nil {
+						return err
+					}
 					say("")
-					_, err = app.UseDeviceLink(ctx, func(url, code string, expires time.Time) {
-						say("Open " + url)
-						say("and approve the code " + code + " (valid until " + expires.Local().Format(time.TimeOnly) + ")")
-						say("waiting …")
-					}, say)
 				}
-				if err != nil {
-					return err
+				opts := core.MigrateOptions{Mode: mode, Logs: logs}
+				if sure {
+					opts.Remove = remove
 				}
-				say("")
-			}
-			return app.MigrateServers(ctx, sel, say)
-		}, func() tea.Cmd {
-			m.legacy = nil
-			return tea.Batch(m.LoadServers(), m.scanLegacy())
-		})
-		m.busyCanCancel = needAccount && acct == "link"
-		return cmd
+				return app.MigrateServers(ctx, sel, files, opts, say)
+			}, func() tea.Cmd {
+				m.legacy = nil
+				return tea.Batch(m.LoadServers(), m.scanLegacy())
+			})
+			m.busyCanCancel = needAccount && acct == "link"
+			return cmd
+		}
+		if len(remove) == 0 {
+			return start(false)
+		}
+		var items []string
+		for _, k := range remove {
+			items = append(items, what[k])
+		}
+		return m.confirmDelete(items, start)
 	})
+}
+
+// confirmDelete asks once more before an old installation's parts are
+// deleted; then runs with whether they may be.
+func (m *Model) confirmDelete(items []string, then func(sure bool) tea.Cmd) tea.Cmd {
+	sure := false
+	f := huh.NewForm(huh.NewGroup(
+		huh.NewConfirm().Title("Delete these for sure, once the servers are moved?").
+			Description("• " + strings.Join(items, "\n• ") + "\nThis cannot be undone.").
+			Affirmative("Yes, delete them").Negative("No, keep them").Value(&sure),
+	))
+	return m.ShowForm(f, func() tea.Cmd { return then(sure) })
 }
 
 // Uninstall.

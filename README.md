@@ -101,7 +101,7 @@ version, and how many matches and restarts it has had.
 | `a` / `e` / `d` | add servers / edit one (regions, guilds, tick rate, empty TTL, runtime pin) / delete |
 | `i` | reinstall a server (runs the egg's install step again) |
 | `U` | updates of evr-ptero, the game files, nevr-runtime, the panel and Wings: install, pick a version, settings |
-| `M` | move servers from an old Echo egg (only when the dashboard reports some) |
+| `M` | move servers from an old Echo egg: replace them or keep the panel servers, old logs, deleting the old files (only when the dashboard reports some) |
 | `c` | account: sign-in state and registered servers; `l` links this host at echovrce.com/device, `p` signs in with a password, `o` takes the account from an old installation's game folder |
 | `m` | more: updates, runtime versions, Discord alerts and the background service, moving servers from an old Echo egg, the panel connection, the panel admin login (show it, set or generate a new password), re-running the setup, the egg files, uninstalling the panel |
 
@@ -205,24 +205,34 @@ A small background service on the node (dashboard: `m` → Discord alerts and th
 ## Moving from v1
 
 The old guide and egg are kept on the [`v1`](https://github.com/marshmallow-mia/pterodactyl_Echo_Server/tree/v1) branch.
-Nothing has to be reinstalled: the panel, Wings and the servers stay, only the servers' egg changes.
+The panel and Wings stay; the old servers are moved to the nevr-runtime egg.
 
 On the panel host, run `sudo evr-ptero` and pick "Use an existing panel". When the dashboard finds servers on an old
-Echo egg, it says so; press `M` (or `m` → Move servers from an old Echo egg) and pick the servers. If evr-ptero has no
-account yet, the same form signs in first, by default with the account the old servers used (read from
-`/opt/ready-at-dawn-echo-arena/_local/config.json`, the other folders Wings may mount, or the servers' own folders).
-The same with commands:
+Echo egg, it says so; press `M` (or `m` → Move servers from an old Echo egg) and pick the servers. The form explains
+both ways of moving them:
+
+- **Replace them with new servers** (recommended): each old server is deleted and a new one is created on the same
+  port, with the same name and owner, like a fresh install. It gets a new ID in the panel; subusers, schedules, backups
+  and databases of the old server are gone.
+- **Keep the panel servers**: each keeps its ID, subusers, schedules and backups; its egg, image, variables and mounts
+  are switched and the egg's install step runs again.
+
+The old logs (`/opt/ready-at-dawn-echo-arena/logs/`) are moved to `/srv/echovr/logs/v1/`; you can also keep them where
+they are or delete them. The form then asks whether to delete the old checkout (`/opt/pterodactyl_Echo_Server`), the
+old game folder and the old egg with its mounts. Nothing is deleted unless you pick it and confirm.
+
+If evr-ptero has no account yet, the same form signs in first, by default with the account the old servers used (read
+from the old game folder's `_local/config.json`).
 
 ```sh
-sudo evr-ptero init                 # connect to the panel
-sudo evr-ptero migrate detect       # lists the old servers and the account found for them
-sudo evr-ptero migrate run          # signs in with that account when none is set, then moves the servers
+sudo evr-ptero init                                # connect to the panel
+sudo evr-ptero migrate detect                      # the old servers, files and account
+sudo evr-ptero migrate run --mode recreate         # or --mode keep; asks what to delete
+sudo evr-ptero migrate run --mode recreate --logs move --remove scripts,game,panel --yes
 ```
 
-`migrate run` switches each old server to the new egg and image, keeping its allocation, owner and limits. It gives the
-server the account and the shared game files, and restarts it. The old egg, the old game folder and any game files in
-the servers' own folders are left alone; delete them once everything works. To take the account from an old game folder
-on its own: account screen → `o`, or `evr-ptero account set --from-game-dir /opt/ready-at-dawn-echo-arena`.
+Without `--remove`, `migrate run` asks for each part; `--yes` alone deletes nothing. To take the account from an old
+game folder on its own: account screen → `o`, or `evr-ptero account set --from-game-dir /opt/ready-at-dawn-echo-arena`.
 
 ## Troubleshooting
 

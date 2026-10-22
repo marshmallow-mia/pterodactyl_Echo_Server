@@ -224,6 +224,34 @@ func (l *Local) AttachMount(ctx context.Context, serverID int, mounts []int) err
 	return err
 }
 
+// DetachMounts removes every mount from a server except keep.
+func (l *Local) DetachMounts(ctx context.Context, serverID int, keep []int) error {
+	code := fmt.Sprintf(`foreach (%[1]s\Models\Mount::query()->whereNotIn('id', %[2]s)->get() as $m) { $m->servers()->detach(%[3]d); } $out = true;`,
+		l.ns(), phpInts(keep), serverID)
+	_, err := l.php(ctx, code)
+	return err
+}
+
+// RemoveLegacy deletes the mounts whose source is one of sources, and the
+// eggs that no server uses any more. It returns what was deleted.
+func (l *Local) RemoveLegacy(ctx context.Context, eggIDs []int, sources []string) (eggs, mounts []string, err error) {
+	quoted := make([]string, len(sources))
+	for i, s := range sources {
+		quoted[i] = phpString(s)
+	}
+	code := fmt.Sprintf(`$out = ['eggs' => [], 'mounts' => []];
+foreach (%[1]s\Models\Mount::query()->whereIn('source', [%[2]s])->get() as $m) { $m->eggs()->detach(); $m->nodes()->detach(); $m->servers()->detach(); $out['mounts'][] = $m->name; $m->delete(); }
+foreach (%[1]s\Models\Egg::query()->whereIn('id', %[3]s)->get() as $e) { if ($e->servers()->count() > 0) continue; $e->variables()->delete(); $out['eggs'][] = $e->name; $e->delete(); }`,
+		l.ns(), strings.Join(quoted, ", "), phpInts(eggIDs))
+	raw, err := l.php(ctx, code)
+	if err != nil {
+		return nil, nil, err
+	}
+	var res struct{ Eggs, Mounts []string }
+	err = json.Unmarshal(raw, &res)
+	return res.Eggs, res.Mounts, err
+}
+
 // PushNodeConfig sends a node's current configuration (incl. allowed mounts)
 // to its Wings, which applies it without a restart.
 func (l *Local) PushNodeConfig(ctx context.Context, nodeID int) error {

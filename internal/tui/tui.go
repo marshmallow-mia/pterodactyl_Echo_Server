@@ -713,7 +713,7 @@ func (m *Model) render() string {
 	}
 	body += m.updatesNotice()
 	if n := len(m.legacy); n > 0 {
-		body += "\n" + ui.Warning.Render(fmt.Sprintf("%d server(s) still on an old Echo egg: press ", n)) + ui.KeyStyle.Render("M") + ui.Warning.Render(" to move them (no reinstall)")
+		body += "\n" + ui.Warning.Render(fmt.Sprintf("%d server(s) still on an old Echo egg: press ", n)) + ui.KeyStyle.Render("M") + ui.Warning.Render(" to move them")
 	}
 	if !m.App.HasAccount() {
 		body += "\n" + ui.Warning.Render("The servers have no EchoVRCE sign-in yet: press ") + ui.KeyStyle.Render("c") + ui.Warning.Render(" to link this host.")

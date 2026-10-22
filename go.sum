@@ -63,8 +63,8 @@ github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/lucasb-eyer/go-colorful v1.4.1 h1:1EO+WB73+EH8EVbzlrG3KLAfEypQWVHIBqlTf+2hNss=
 github.com/lucasb-eyer/go-colorful v1.4.1/go.mod h1:R4dSotOR9KMtayYi1e77YzuveK+i7ruzyGqttikkLy0=
-github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.0-rc.4 h1:e+iPUsEe0KGlO8qBdAor5CjS3iM1B521dNwsSrDKiVk=
-github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.0-rc.4/go.mod h1:l6yeBiHu8hhY0gQfxIyXz3jEDYCm0jXXg9i/r73O6Fg=
+github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.0-rc.5 h1:VE/qag6MaxO9WoCOEEaa/qX/7cJEDVLWfI4CfPSSJlc=
+github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.0-rc.5/go.mod h1:l6yeBiHu8hhY0gQfxIyXz3jEDYCm0jXXg9i/r73O6Fg=
 github.com/mattn/go-runewidth v0.0.30 h1:+KUuiDA4fF0R1p5FeueHefjDm+GIM+kWfFnDjybOPgk=
 github.com/mattn/go-runewidth v0.0.30/go.mod h1:3qAiGCV4Koz/yuveO58qUefmUTRm8r0IGEXZ9jeHp/8=
 github.com/mitchellh/hashstructure/v2 v2.0.2 h1:vGKWl0YJqUNxE8d+h8f6NJLcCJrgbhC4NcD46KavDd4=
