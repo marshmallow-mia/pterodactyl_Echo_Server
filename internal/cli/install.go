@@ -95,7 +95,7 @@ func runInstall(cmd *cobra.Command, g *globals, f *installFlags) error {
 	if err != nil {
 		return err
 	}
-	g.say("\nPanel: %s\nLogin: %s / %s\n(saved in /etc/evr-ptero/install.env)", res.URL, res.AdminEmail, res.AdminPassword)
+	g.say("\nPanel: %s\nLogin: %s / %s\n(saved in %s)", res.URL, res.AdminEmail, res.AdminPassword, panelinstall.StateFile())
 	if f.skipSetup {
 		return nil
 	}

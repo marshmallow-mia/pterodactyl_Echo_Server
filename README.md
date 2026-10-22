@@ -219,7 +219,8 @@ both ways of moving them:
 
 The old logs (`/opt/ready-at-dawn-echo-arena/logs/`) are moved to `/srv/echovr/logs/v1/`; you can also keep them where
 they are or delete them. The form then asks whether to delete the old checkout (`/opt/pterodactyl_Echo_Server`), the
-old game folder and the old egg with its mounts. Nothing is deleted unless you pick it and confirm.
+old game folder and the old egg with its mounts. Nothing is deleted unless you pick it and confirm. The cron jobs of
+the v1 guide (`move_logs.sh`, the log cleanup) are removed together with the folder they point into.
 
 If evr-ptero has no account yet, the same form signs in first, by default with the account the old servers used (read
 from the old game folder's `_local/config.json`).

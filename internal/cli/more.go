@@ -117,6 +117,9 @@ func migrateCmd(g *globals) *cobra.Command {
 				if files.ScriptsDir != "" {
 					fmt.Fprintf(w, "Old scripts: %s\n", files.ScriptsDir)
 				}
+				for _, l := range core.CronLines([]string{files.ScriptsDir, files.GameDir}) {
+					fmt.Fprintf(w, "Old cron job: %s\n", l)
+				}
 				switch {
 				case a.HasAccount():
 				case found:

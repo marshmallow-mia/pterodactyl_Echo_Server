@@ -84,6 +84,7 @@ func TestCleanupLegacy(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	fakeCron(t, "", "")
 	a := &App{Cfg: &pcfg.Config{DataDir: data}, Secrets: pcfg.Secrets{}}
 	f := LegacyFiles{GameDir: gameDir, ScriptsDir: filepath.Join(repo, "scripts"), RepoDir: repo, RepoEntries: v1RepoEntries}
 

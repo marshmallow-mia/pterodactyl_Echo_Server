@@ -138,7 +138,7 @@ func installForm(m *Model) tea.Cmd {
 			).Value(&product),
 			huh.NewInput().Title("Domain name").Description("Must point at this host's public IP.").Value(&o.FQDN).Validate(required("the domain")),
 			huh.NewInput().Title("Admin email").Description("Your panel login.").Value(&o.Email).Validate(required("the email")),
-			huh.NewInput().Title("Admin password").Description(fmt.Sprintf("At least %d characters. Leave empty to have one generated (shown at the end and kept in /etc/evr-ptero/install.env).", core.MinPanelPassword)).
+			huh.NewInput().Title("Admin password").Description(fmt.Sprintf("At least %d characters. Leave empty to have one generated (shown at the end and kept in %s).", core.MinPanelPassword, panelinstall.StateFile())).
 				EchoMode(huh.EchoModePassword).Value(&adminPassword).Validate(func(s string) error {
 				if s != "" && len(s) < core.MinPanelPassword {
 					return fmt.Errorf("at least %d characters", core.MinPanelPassword)

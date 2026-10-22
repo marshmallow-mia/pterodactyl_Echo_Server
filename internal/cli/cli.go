@@ -60,6 +60,7 @@ you can import egg/egg-echovr-nevr.json yourself and manage everything in the pa
 		},
 	}
 	root.PersistentFlags().StringVar(&g.dir, "config-dir", pcfg.Dir(), "configuration directory")
+	root.PersistentPreRun = func(*cobra.Command, []string) { panelinstall.SetStateDir(g.dir) }
 	root.PersistentFlags().BoolVar(&g.json, "json", false, "print JSON")
 	root.PersistentFlags().BoolVarP(&g.yes, "yes", "y", false, "do not ask for confirmation")
 	root.AddCommand(initCmd(g), panelCmd(g), eggCmd(g), filesCmd(g), serverCmd(g), accountCmd(g), runtimeCmd(g), migrateCmd(g), agentCmd(g), updateCmd(g), postUpdateCmd(g))

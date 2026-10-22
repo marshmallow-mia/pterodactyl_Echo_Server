@@ -23,6 +23,7 @@ import (
 	ui "github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/tui"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/updates"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/core"
+	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/panelinstall"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/pcfg"
 )
 
@@ -31,6 +32,7 @@ var Wizard func(m *Model) tea.Cmd
 
 // Run starts the TUI.
 func Run(ctx context.Context, dir string) error {
+	panelinstall.SetStateDir(dir)
 	m := New(ctx, dir)
 	_, err := tea.NewProgram(m, tea.WithContext(ctx)).Run()
 	if errors.Is(err, tea.ErrProgramKilled) || errors.Is(err, context.Canceled) {

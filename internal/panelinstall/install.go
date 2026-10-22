@@ -180,14 +180,21 @@ func (o *Options) defaults() error {
 	return nil
 }
 
-const stateFile = "/etc/evr-ptero/install.env"
+// stateDir holds install.env; the configuration directory (SetStateDir).
+var stateDir = "/etc/evr-ptero"
+
+// SetStateDir puts install.env in dir, evr-ptero's configuration directory.
+func SetStateDir(dir string) { stateDir = dir }
+
+// StateFile is the path of install.env.
+func StateFile() string { return filepath.Join(stateDir, "install.env") }
 
 // state is kept between runs so passwords and keys are reused.
 type state map[string]string
 
 func loadState() state {
 	s := state{}
-	f, err := os.Open(stateFile)
+	f, err := os.Open(StateFile())
 	if err != nil {
 		return s
 	}
@@ -202,7 +209,7 @@ func loadState() state {
 }
 
 func (s state) save() error {
-	if err := os.MkdirAll(filepath.Dir(stateFile), 0o755); err != nil {
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		return err
 	}
 	var b strings.Builder
@@ -212,7 +219,7 @@ func (s state) save() error {
 			fmt.Fprintf(&b, "%s=%s\n", k, v)
 		}
 	}
-	return os.WriteFile(stateFile, []byte(b.String()), 0o600)
+	return os.WriteFile(StateFile(), []byte(b.String()), 0o600)
 }
 
 // AdminLogin returns the panel admin login the installer created on this

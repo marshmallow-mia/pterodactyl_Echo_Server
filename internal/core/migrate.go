@@ -147,6 +147,39 @@ type LegacyFiles struct {
 	RepoEntries []string
 }
 
+// scriptDirs are the folders deleting the old scripts removes.
+func (f LegacyFiles) scriptDirs() []string {
+	dirs := []string{f.ScriptsDir}
+	if len(f.RepoEntries) > 1 {
+		dirs = append(dirs, f.RepoDir) // the whole v1 checkout
+	}
+	return dirs
+}
+
+// cronNote mentions the cron jobs that go with dirs.
+func cronNote(dirs []string) string {
+	switch n := len(CronLines(dirs)); n {
+	case 0:
+		return ""
+	case 1:
+		return " and its cron job"
+	default:
+		return fmt.Sprintf(" and its %d cron jobs", n)
+	}
+}
+
+// removeCron deletes the cron jobs that refer to dirs, which are gone now.
+func removeCron(dirs []string, say func(string)) error {
+	removed, err := RemoveCronLines(dirs)
+	for _, l := range removed {
+		say("removed the old cron job: " + l)
+	}
+	if err != nil {
+		return fmt.Errorf("removing the old cron jobs: %w", err)
+	}
+	return nil
+}
+
 // LegacyRepoDir is where the v1 guide cloned this repository.
 const LegacyRepoDir = "/opt/pterodactyl_Echo_Server"
 
@@ -193,10 +226,10 @@ func (a *App) Removable(list []LegacyServer, f LegacyFiles) []Removal {
 		if len(f.RepoEntries) > 1 {
 			what = "the old checkout " + f.RepoDir
 		}
-		out = append(out, Removal{RemoveScripts, what})
+		out = append(out, Removal{RemoveScripts, what + cronNote(f.scriptDirs())})
 	}
 	if f.GameDir != "" {
-		out = append(out, Removal{RemoveGame, "the old game folder " + f.GameDir})
+		out = append(out, Removal{RemoveGame, "the old game folder " + f.GameDir + cronNote([]string{f.GameDir})})
 	}
 	if a.Local() != nil && len(list) > 0 {
 		names := map[string]bool{}
@@ -327,12 +360,18 @@ func (a *App) cleanupLegacy(ctx context.Context, list []LegacyServer, f LegacyFi
 			return fmt.Errorf("deleting the old game folder: %w", err)
 		}
 		say("deleted the old game folder " + f.GameDir)
+		if err := removeCron([]string{f.GameDir}, say); err != nil {
+			return err
+		}
 	}
 	if remove[RemoveScripts] && f.RepoDir != "" {
 		if err := game.RemoveEntries(f.RepoDir, f.RepoEntries); err != nil {
 			return fmt.Errorf("deleting the old scripts: %w", err)
 		}
 		say("deleted the old scripts in " + f.RepoDir)
+		if err := removeCron(f.scriptDirs(), say); err != nil {
+			return err
+		}
 	}
 	return nil
 }

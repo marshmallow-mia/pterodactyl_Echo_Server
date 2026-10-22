@@ -3,6 +3,7 @@ package panelinstall
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -41,7 +42,7 @@ systemctl reload nginx 2>/dev/null || true
 rm -rf /usr/local/bin/wings /etc/pterodactyl /etc/pelican /var/lib/pterodactyl /var/lib/pelican /var/log/pterodactyl /var/log/pelican /tmp/pterodactyl /tmp/pelican /var/run/wings
 userdel pterodactyl 2>/dev/null || true; userdel pelican 2>/dev/null || true
 `+staleBridges+`
-rm -f /etc/evr-ptero/install.env /etc/evr-ptero/config.yaml /etc/evr-ptero/secrets.env`)
+rm -f `+shq(StateFile())+` `+shq(filepath.Join(stateDir, "config.yaml"))+` `+shq(filepath.Join(stateDir, "secrets.env")))
 		}},
 	}
 	if o.Packages {
