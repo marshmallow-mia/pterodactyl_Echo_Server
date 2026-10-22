@@ -39,6 +39,7 @@ type (
 		list []core.LegacyServer
 		err  error
 	}
+	legacyScanMsg []core.LegacyServer
 )
 
 // Account screen.
@@ -81,8 +82,36 @@ func (m *Model) updateAccount(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.linkDevice()
 	case "p":
 		return m, m.passwordForm()
+	case "o":
+		return m, m.oldGameForm()
 	}
 	return m, nil
+}
+
+// oldGameForm takes the account from an old game folder's _local config.
+func (m *Model) oldGameForm() tea.Cmd {
+	app := m.App
+	dir := core.LegacyGameDir
+	var acc core.LegacyAccount
+	f := huh.NewForm(huh.NewGroup(
+		huh.NewNote().Title("Account from an old installation").Description("Reads the Discord ID and password the old game folder keeps in its\nconfig.json or config.yaml. The v1 guide used "+core.LegacyGameDir+"."),
+		huh.NewInput().Title("Old game folder").Value(&dir).Validate(func(s string) error {
+			id, pw, key := core.LegacyCredentials(strings.TrimSpace(s))
+			switch {
+			case id == "":
+				return errors.New("no account found in " + filepath.Join(s, "_local"))
+			case pw == "":
+				return errors.New("only a Discord ID there, no password; press esc and use p")
+			}
+			acc = core.LegacyAccount{DiscordID: id, Password: pw, HTTPKey: key, Dir: strings.TrimSpace(s)}
+			return nil
+		}),
+	).Title("EchoVRCE account"))
+	return m.ShowForm(f, func() tea.Cmd {
+		return m.Run("Signing in", func(ctx context.Context, say func(string)) error {
+			return app.UseLegacyAccount(ctx, acc, say)
+		}, func() tea.Cmd { return m.openAccount() })
+	})
 }
 
 // linkDevice links this host at echovrce.com/device and gives every server the link.
@@ -133,7 +162,8 @@ func (m *Model) renderAccount() string {
 		b.WriteString(ui.Warning.Render("Not signed in yet: the servers cannot register with EchoVRCE.") + "\n\n")
 		b.WriteString("Press " + ui.KeyStyle.Render("l") + " to link this host at echovrce.com/device (recommended, no password).\n")
 		b.WriteString(ui.Subtle.Render(m.wrap(core.ResetPasswordNote, 0)) + "\n\n")
-		b.WriteString("Or press " + ui.KeyStyle.Render("p") + " to sign in with your Discord ID and server password.\n")
+		b.WriteString("Or press " + ui.KeyStyle.Render("p") + " to sign in with your Discord ID and server password,\n")
+		b.WriteString("or " + ui.KeyStyle.Render("o") + " to take them from an old installation's game folder.\n")
 	case a.err != nil:
 		b.WriteString(ui.Error.Render(m.wrap(a.err.Error(), 0)) + "\n\n")
 		b.WriteString(ui.Subtle.Render("Press l to link this host again, or p to use a password.") + "\n")
@@ -151,7 +181,7 @@ func (m *Model) renderAccount() string {
 			fmt.Fprintf(&b, "  %s  %-12s %-11s players %d\n", s.CreatedAt.Local().Format(time.DateTime), s.Region, s.LobbyType, s.Players)
 		}
 	}
-	return b.String() + m.footer(ui.K("l", "link this host"), ui.K("p", "password sign-in"), ui.K("r", "refresh"), ui.K("esc", "back"))
+	return b.String() + m.footer(ui.K("l", "link this host"), ui.K("p", "password sign-in"), ui.K("o", "from old install"), ui.K("r", "refresh"), ui.K("esc", "back"))
 }
 
 // The "more" menu.
@@ -502,6 +532,20 @@ func (m *Model) loadLegacy() tea.Cmd {
 	}
 }
 
+// scanLegacy looks for old-egg servers in the background, for the dashboard notice.
+func (m *Model) scanLegacy() tea.Cmd {
+	app := m.App
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(m.Ctx, 30*time.Second)
+		defer cancel()
+		list, err := app.LegacyServers(ctx)
+		if err != nil {
+			return nil
+		}
+		return legacyScanMsg(app.UnhiddenLegacy(list))
+	}
+}
+
 func (m *Model) migrateForm(msg legacyMsg) tea.Cmd {
 	switch {
 	case msg.err != nil:
@@ -510,32 +554,72 @@ func (m *Model) migrateForm(msg legacyMsg) tea.Cmd {
 	case len(msg.list) == 0:
 		m.flash, m.flashBad = "No servers on other Echo eggs found.", false
 		return nil
-	case !m.App.HasAccount():
-		m.flash, m.flashBad = "Sign in first: migrated servers get this host's account.", true
-		return m.openAccount()
 	}
 	m.flash = ""
+	app := m.App
 	var opts []huh.Option[string]
 	for _, s := range msg.list {
 		opts = append(opts, huh.NewOption(fmt.Sprintf("%s  (%s, egg %q, port %d)", s.Server.Name, s.Server.Identifier, s.EggName, s.Port), s.Server.Identifier).Selected(true))
 	}
 	var picked []string
-	confirm := false
-	f := huh.NewForm(huh.NewGroup(
+	action := "move"
+	fields := []huh.Field{
 		huh.NewMultiSelect[string]().Title("Servers to move to the nevr-runtime egg").
-			Description("Each keeps its allocation, owner and limits, gets this host's account and the shared game files, and restarts once.").
-			Options(opts...).Value(&picked).Validate(func(v []string) error {
-			if len(v) == 0 {
+			Description("Nothing is reinstalled: each keeps its allocation, owner and limits, gets this host's account and the shared game files, and restarts once.").
+			Options(opts...).Height(min(len(opts), 8) + 4).Value(&picked).Validate(func(v []string) error {
+			if len(v) == 0 && action == "move" {
 				return errors.New("pick at least one server")
 			}
 			return nil
 		}),
-		huh.NewConfirm().Title("Move them now?").Description("The old egg and game folders are left alone.").Value(&confirm),
-	).Title("Move servers from an old Echo egg"))
-	app := m.App
-	return m.ShowForm(f, func() tea.Cmd {
-		if !confirm {
-			m.flash, m.flashBad = "cancelled", false
+	}
+
+	// Without an account the move signs in first, preferably with the one the old servers used.
+	acct, discordID, password := "", "", ""
+	var old core.LegacyAccount
+	needAccount := !app.HasAccount()
+	if needAccount {
+		var found bool
+		old, found = app.FindLegacyAccount(msg.list)
+		var aopts []huh.Option[string]
+		if found {
+			acct = "legacy"
+			aopts = append(aopts, huh.NewOption(fmt.Sprintf("The old servers' account (Discord ID %s, from %s)", old.DiscordID, old.Dir), "legacy"))
+		}
+		aopts = append(aopts,
+			huh.NewOption("Link this host at echovrce.com/device (no password)", "link"),
+			huh.NewOption("Discord ID and server password", "password"))
+		if acct == "" {
+			acct = "link"
+		}
+		fields = append(fields,
+			huh.NewSelect[string]().Title("EchoVRCE account for the moved servers").Options(aopts...).Value(&acct),
+		)
+	}
+	fields = append(fields, huh.NewSelect[string]().Title("Move them now?").Description("The old egg and game folders are left alone.").Options(
+		huh.NewOption("Move now", "move"),
+		huh.NewOption("Not now", "later"),
+		huh.NewOption("Not now, and stop pointing at these servers on the dashboard", "hide"),
+	).Value(&action))
+	groups := []*huh.Group{huh.NewGroup(fields...).Title("Move servers from an old Echo egg")}
+	if needAccount {
+		groups = append(groups, huh.NewGroup(
+			huh.NewInput().Title("Discord user ID").Description("Discord → Settings → Advanced → Developer mode, then copy your ID.").Value(&discordID).Validate(digits),
+			huh.NewInput().Title("Server password").Description("The password you set for hosting with the EchoVRCE bot.").EchoMode(huh.EchoModePassword).Value(&password).Validate(required("the password")),
+		).Title("Password sign-in").WithHideFunc(func() bool { return action != "move" || acct != "password" }))
+	}
+	return m.ShowForm(huh.NewForm(groups...), func() tea.Cmd {
+		switch action {
+		case "later":
+			m.flash, m.flashBad = "Not moved. m → Move servers from an old Echo egg when you are ready.", false
+			return nil
+		case "hide":
+			if err := app.HideLegacy(msg.list); err != nil {
+				m.flash, m.flashBad = err.Error(), true
+				return nil
+			}
+			m.legacy = nil
+			m.flash, m.flashBad = "Not moved. They stay under m → Move servers from an old Echo egg.", false
 			return nil
 		}
 		want := map[string]bool{}
@@ -548,9 +632,35 @@ func (m *Model) migrateForm(msg legacyMsg) tea.Cmd {
 				sel = append(sel, s)
 			}
 		}
-		return m.Run(fmt.Sprintf("Moving %d server(s)", len(sel)), func(ctx context.Context, say func(string)) error {
+		cmd := m.Run(fmt.Sprintf("Moving %d server(s)", len(sel)), func(ctx context.Context, say func(string)) error {
+			if needAccount {
+				var err error
+				switch acct {
+				case "legacy":
+					err = app.UseLegacyAccount(ctx, old, say)
+				case "password":
+					_, err = app.UsePassword(ctx, discordID, password, say)
+				case "link":
+					say(core.ResetPasswordNote)
+					say("")
+					_, err = app.UseDeviceLink(ctx, func(url, code string, expires time.Time) {
+						say("Open " + url)
+						say("and approve the code " + code + " (valid until " + expires.Local().Format(time.TimeOnly) + ")")
+						say("waiting …")
+					}, say)
+				}
+				if err != nil {
+					return err
+				}
+				say("")
+			}
 			return app.MigrateServers(ctx, sel, say)
-		}, nil)
+		}, func() tea.Cmd {
+			m.legacy = nil
+			return tea.Batch(m.LoadServers(), m.scanLegacy())
+		})
+		m.busyCanCancel = needAccount && acct == "link"
+		return cmd
 	})
 }
 

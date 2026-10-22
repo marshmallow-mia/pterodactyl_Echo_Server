@@ -482,26 +482,33 @@ func (a *App) attachMounts(ctx context.Context, s panel.Server) error {
 	return a.Panel().AttachServerMounts(ctx, s.ID, a.Cfg.Panel.MountIDs)
 }
 
+// attachMountsWhenInstalled attaches the shared files, retrying while the
+// server's install step runs: Pterodactyl 2 only attaches mounts to
+// installed servers (harmless on the other panels).
+func (a *App) attachMountsWhenInstalled(ctx context.Context, s panel.Server) error {
+	deadline := time.Now().Add(30 * time.Minute)
+	for {
+		err := a.attachMounts(ctx, s)
+		if err == nil {
+			return nil
+		}
+		// Pterodactyl 2 answers 403 ("installation state") while installing.
+		var ae *panel.APIError
+		if !errors.As(err, &ae) || (ae.Status != 409 && ae.Status != 400 && ae.Status != 422 && ae.Status != 403) || time.Now().After(deadline) {
+			return fmt.Errorf("%s: attaching the shared files: %w", s.Name, err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
+}
+
 func (a *App) startWhenInstalled(ctx context.Context, s panel.Server, say func(string)) error {
-	// Pterodactyl 2 only attaches mounts to installed servers, so wait for
-	// the install step to finish first (harmless on the other panels).
 	if a.Cfg.GameSource == "mount" {
-		deadline := time.Now().Add(30 * time.Minute)
-		for {
-			err := a.attachMounts(ctx, s)
-			if err == nil {
-				break
-			}
-			// Pterodactyl 2 answers 403 ("installation state") while installing.
-			var ae *panel.APIError
-			if !errors.As(err, &ae) || (ae.Status != 409 && ae.Status != 400 && ae.Status != 422 && ae.Status != 403) || time.Now().After(deadline) {
-				return fmt.Errorf("%s: attaching the shared files: %w", s.Name, err)
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(5 * time.Second):
-			}
+		if err := a.attachMountsWhenInstalled(ctx, s); err != nil {
+			return err
 		}
 		if say != nil {
 			say(s.Name + ": shared game files attached")

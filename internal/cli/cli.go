@@ -500,7 +500,7 @@ func accountCmd(g *globals) *cobra.Command {
 			}
 			id, pw := discordID, ""
 			if gameDir != "" {
-				oldID, oldPW, key := legacyCredentials(gameDir)
+				oldID, oldPW, key := core.LegacyCredentials(gameDir)
 				if oldID == "" {
 					return fmt.Errorf("no credentials found in %s/_local", gameDir)
 				}

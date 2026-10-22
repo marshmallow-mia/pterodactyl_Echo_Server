@@ -1,53 +1,20 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
-	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/config"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/updates"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/agent"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/core"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/pcfg"
 )
-
-// legacyCredentials reads the account from an old game directory: config.yaml
-// (nevr 4.x) or the serverdb/login URLs in config.json (EchoRelay era).
-func legacyCredentials(gameDir string) (discordID, password, httpKey string) {
-	if b, err := os.ReadFile(filepath.Join(gameDir, "_local", "config.yaml")); err == nil {
-		if c, err := config.Parse(b); err == nil {
-			discordID, password, httpKey = c.Identity.DiscordID, c.Auth.Password, c.Auth.HTTPKey
-		}
-	}
-	if discordID != "" && password != "" {
-		return
-	}
-	var cj map[string]any
-	if b, err := os.ReadFile(filepath.Join(gameDir, "_local", "config.json")); err == nil && json.Unmarshal(b, &cj) == nil {
-		for _, k := range []string{"serverdb_host", "loginservice_host"} {
-			s, _ := cj[k].(string)
-			if u, err := url.Parse(s); err == nil {
-				q := u.Query()
-				if discordID == "" {
-					discordID = q.Get("discordid")
-				}
-				if password == "" {
-					password = q.Get("password")
-				}
-			}
-		}
-	}
-	return
-}
 
 func runtimeCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{Use: "runtime", Short: "nevr-runtime versions in the node's shared files"}
@@ -129,6 +96,7 @@ func migrateCmd(g *globals) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			acc, found := a.FindLegacyAccount(list)
 			return g.print(list, func(w io.Writer) {
 				if len(list) == 0 {
 					fmt.Fprintln(w, "No servers on other Echo eggs found.")
@@ -136,6 +104,13 @@ func migrateCmd(g *globals) *cobra.Command {
 				}
 				for _, s := range list {
 					fmt.Fprintf(w, "  %-24s %s  egg %q  port %d\n", s.Server.Name, s.Server.Identifier, s.EggName, s.Port)
+				}
+				switch {
+				case a.HasAccount():
+				case found:
+					fmt.Fprintf(w, "Account in %s: Discord ID %s (migrate run uses it)\n", acc.Dir, acc.DiscordID)
+				default:
+					fmt.Fprintln(w, "No account found in the old game files; sign in before migrate run.")
 				}
 			})
 		},
@@ -170,6 +145,15 @@ func migrateCmd(g *globals) *cobra.Command {
 			}
 			if !g.confirm(fmt.Sprintf("Migrate these %d server(s)? They restart once.", len(sel))) {
 				return errors.New("cancelled (use --yes)")
+			}
+			if !a.HasAccount() {
+				acc, found := a.FindLegacyAccount(list)
+				if !found {
+					return fmt.Errorf("%w; none was found in the old game files", core.ErrNoAccount)
+				}
+				if err := a.UseLegacyAccount(cmd.Context(), acc, func(s string) { g.say("%s", s) }); err != nil {
+					return err
+				}
 			}
 			return a.MigrateServers(cmd.Context(), sel, func(s string) { g.say("%s", s) })
 		},

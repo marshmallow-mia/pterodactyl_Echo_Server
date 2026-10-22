@@ -71,6 +71,8 @@ type Config struct {
 	Metrics struct {
 		Listen string `yaml:"listen,omitempty"`
 	} `yaml:"metrics,omitempty"`
+	// HiddenLegacy lists old-egg servers (by UUID) the dashboard no longer points at.
+	HiddenLegacy []string `yaml:"hidden_legacy,omitempty"`
 
 	path string
 }

@@ -99,6 +99,10 @@ type Model struct {
 	updChecking bool
 	reexec      bool
 
+	// legacy are old-egg servers the dashboard points at; scanned once.
+	legacy        []core.LegacyServer
+	legacyScanned bool
+
 	confirm       string
 	confirmFunc   func() tea.Cmd
 	flash         string
@@ -265,6 +269,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case serversMsg:
 		m.servers, m.loadErr = msg.list, msg.err
 		m.refresh()
+		if !m.legacyScanned && msg.err == nil && m.App != nil {
+			m.legacyScanned = true
+			return m, tea.Batch(tick(), m.scanLegacy())
+		}
 		return m, tick()
 	case busyLineMsg:
 		m.busyLines = append(m.busyLines, msg.line)
@@ -285,6 +293,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case legacyMsg:
 		return m, m.migrateForm(msg)
+	case legacyScanMsg:
+		m.legacy = msg
+		return m, nil
 	case versionsMsg:
 		return m, m.applyForm(msg)
 	case updatesMsg:
@@ -473,6 +484,8 @@ func (m *Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.menu()
 	case "U":
 		return m, m.openUpdates()
+	case "M":
+		return m, m.loadLegacy()
 	case "e":
 		if has {
 			return m, m.editForm(sel)
@@ -699,6 +712,9 @@ func (m *Model) render() string {
 		body += "\n" + ui.Error.Render(m.loadErr.Error())
 	}
 	body += m.updatesNotice()
+	if n := len(m.legacy); n > 0 {
+		body += "\n" + ui.Warning.Render(fmt.Sprintf("%d server(s) still on an old Echo egg: press ", n)) + ui.KeyStyle.Render("M") + ui.Warning.Render(" to move them (no reinstall)")
+	}
 	if !m.App.HasAccount() {
 		body += "\n" + ui.Warning.Render("The servers have no EchoVRCE sign-in yet: press ") + ui.KeyStyle.Render("c") + ui.Warning.Render(" to link this host.")
 	}
