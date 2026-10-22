@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -479,23 +480,35 @@ func (a *App) CreateServers(ctx context.Context, n int, set instance.Settings, s
 		}
 		created = append(created, s)
 	}
-	// Wait for the install step, then start.
+	// Wait for the install step, then start. One failing does not leave the
+	// others without their shared files, device link or start.
+	var errs []error
 	for _, s := range created {
 		if err := a.startWhenInstalled(ctx, s, say); err != nil {
-			return created, err
+			if ctx.Err() != nil {
+				return created, ctx.Err()
+			}
+			errs = append(errs, err)
+			if say != nil {
+				say(err.Error())
+			}
 		}
 	}
-	return created, nil
+	return created, errors.Join(errs...)
 }
 
 func (a *App) attachMounts(ctx context.Context, s panel.Server) error {
+	return a.attachMountIDs(ctx, s, a.Cfg.Panel.MountIDs)
+}
+
+func (a *App) attachMountIDs(ctx context.Context, s panel.Server, ids []int) error {
 	if len(a.Cfg.Panel.MountIDs) == 0 {
 		return fmt.Errorf("%w: no shared-file mounts", ErrNotSetUp)
 	}
 	if l := a.Local(); l != nil && l.Kind == panel.Pterodactyl1 {
-		return l.AttachMount(ctx, s.ID, a.Cfg.Panel.MountIDs)
+		return l.AttachMount(ctx, s.ID, ids)
 	}
-	return a.Panel().AttachServerMounts(ctx, s.ID, a.Cfg.Panel.MountIDs)
+	return a.Panel().AttachServerMounts(ctx, s.ID, ids)
 }
 
 // attachMountsWhenInstalled attaches the shared files, retrying while the
@@ -520,6 +533,9 @@ func (a *App) attachMountsWhenInstalled(ctx context.Context, s panel.Server) err
 		}
 	}
 }
+
+// retryWait is the pause between attempts to start a server.
+var retryWait = 5 * time.Second
 
 func (a *App) startWhenInstalled(ctx context.Context, s panel.Server, say func(string)) error {
 	if a.Cfg.GameSource == "mount" {
@@ -546,6 +562,9 @@ func (a *App) startWhenInstalled(ctx context.Context, s panel.Server, say func(s
 	}
 	p := a.Panel()
 	deadline := time.Now().Add(30 * time.Minute)
+	// The panel answers 500 (Pelican) or the request fails when it cannot
+	// reach Wings for a moment; that is retried for a while only.
+	unreachable := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
 		err := p.Power(ctx, s.Identifier, "start")
 		if err == nil {
@@ -557,13 +576,18 @@ func (a *App) startWhenInstalled(ctx context.Context, s panel.Server, say func(s
 		// 409 while the server is still installing; 502/504 while Wings is
 		// busy, e.g. pulling the image on the first start.
 		var ae *panel.APIError
-		if !errors.As(err, &ae) || (ae.Status != 409 && ae.Status != 502 && ae.Status != 504) {
-			return err
+		switch {
+		case ctx.Err() != nil:
+			return ctx.Err()
+		case errors.As(err, &ae) && (ae.Status == 409 || ae.Status == 502 || ae.Status == 504):
+		case (!errors.As(err, &ae) || ae.Status == 500) && time.Now().Before(unreachable):
+		default:
+			return fmt.Errorf("%s: start: %w", s.Name, err)
 		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(5 * time.Second):
+		case <-time.After(retryWait):
 		}
 	}
 	return fmt.Errorf("%s did not finish installing", s.Name)
@@ -646,7 +670,45 @@ func (a *App) UpdateServer(ctx context.Context, s Server, change func(*instance.
 
 // Power sends a power signal.
 func (a *App) Power(ctx context.Context, s Server, signal string) error {
+	if signal == "start" || signal == "restart" {
+		if err := a.prepare(ctx, s.Panel); err != nil {
+			return err
+		}
+	}
 	return a.Panel().Power(ctx, s.Panel.Identifier, signal)
+}
+
+// prepare gives a server that never ran what creating it should have: the
+// shared files and the device link. Creation can stop half-way (the panel
+// losing Wings for a moment); starting the server then finishes the job.
+func (a *App) prepare(ctx context.Context, s panel.Server) error {
+	vol := filepath.Join(a.Cfg.Panel.WingsData, s.UUID)
+	if _, err := os.Stat(filepath.Join(vol, status.FileName)); err == nil {
+		return nil // it ran before
+	} else if _, err := os.Stat(vol); err != nil {
+		return nil // Wings runs elsewhere: nothing to check here
+	}
+	if l := a.Local(); l != nil && a.Cfg.GameSource == "mount" {
+		have, err := l.ServerMountIDs(ctx, s.ID)
+		if err != nil {
+			return fmt.Errorf("%s: checking its mounts: %w", s.Name, err)
+		}
+		var missing []int
+		for _, id := range a.Cfg.Panel.MountIDs {
+			if !slices.Contains(have, id) {
+				missing = append(missing, id)
+			}
+		}
+		if len(missing) > 0 {
+			if err := a.attachMountIDs(ctx, s, missing); err != nil {
+				return fmt.Errorf("%s: attaching the shared files: %w", s.Name, err)
+			}
+		}
+	}
+	if _, err := os.Stat(filepath.Join(vol, "root", "_local", ".credentials.json")); err != nil {
+		return a.installDeviceLink(s)
+	}
+	return nil
 }
 
 // Delete removes a server from the panel.

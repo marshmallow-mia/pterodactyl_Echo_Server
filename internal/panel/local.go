@@ -224,6 +224,16 @@ func (l *Local) AttachMount(ctx context.Context, serverID int, mounts []int) err
 	return err
 }
 
+// ServerMountIDs lists the mounts attached to a server.
+func (l *Local) ServerMountIDs(ctx context.Context, serverID int) ([]int, error) {
+	raw, err := l.php(ctx, fmt.Sprintf(`$out = %s\Models\Server::query()->findOrFail(%d)->mounts()->pluck('mounts.id')->map(fn ($id) => (int) $id)->values();`, l.ns(), serverID))
+	if err != nil {
+		return nil, err
+	}
+	var ids []int
+	return ids, json.Unmarshal(raw, &ids)
+}
+
 // DetachMounts removes every mount from a server except keep.
 func (l *Local) DetachMounts(ctx context.Context, serverID int, keep []int) error {
 	code := fmt.Sprintf(`foreach (%[1]s\Models\Mount::query()->whereNotIn('id', %[2]s)->get() as $m) { $m->servers()->detach(%[3]d); } $out = true;`,
