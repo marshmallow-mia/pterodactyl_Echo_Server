@@ -481,7 +481,7 @@ func (m *Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ask(fmt.Sprintf("%s %s? Players in a match are disconnected.", strings.ToUpper(sig[:1])+sig[1:], sel.Name()), run)
 	case "a":
 		if !app.HasAccount() {
-			m.flash, m.flashBad = "Sign in first: l links this host (no password), p uses a password.", true
+			m.flash, m.flashBad = signInFirst(), true
 			return m, m.openAccount()
 		}
 		return m, m.addForm()
@@ -596,7 +596,7 @@ func (m *Model) editForm(s core.Server) tea.Cmd {
 		huh.NewInput().Title("Guilds").Description("Guild IDs to host for; empty = all the account may host.").Value(&guilds),
 		huh.NewInput().Title("Tick rate (Hz)").Value(&tick).Validate(intRange(10, 1000)),
 		huh.NewInput().Title("Empty server TTL (seconds)").Description("0 keeps the runtime's default.").Value(&ttl).Validate(intRange(0, 86400)),
-		huh.NewInput().Title("nevr-runtime").Description(`"current" follows the node; or a tag like v5.4.2.`).Value(&runtime),
+		huh.NewInput().Title("nevr-runtime").Description(`"current" follows the node; or a tag like v6.6.0.`).Value(&runtime),
 		huh.NewConfirm().Title("Restart now if it is running?").Description("Otherwise the change applies at its next restart.").Value(&restart),
 	).Title("Edit " + s.Name()))
 	app := m.App
@@ -746,4 +746,12 @@ func (m *Model) render() string {
 	return m.header() + "\n\n" + body + "\n" + m.footer(
 		ui.K("enter", "console"), ui.K("s", "start"), ui.K("x", "stop"), ui.K("r", "restart"), ui.K("K", "kill"),
 		ui.K("a", "add"), ui.K("e", "edit"), ui.K("i", "reinstall"), ui.K("d", "delete"), ui.K("c", "account"), ui.K("U", "updates"), ui.K("m", "more"), ui.K("q", "quit"))
+}
+
+// signInFirst is the flash for an action that needs a sign-in.
+func signInFirst() string {
+	if core.DeviceLinkEnabled() {
+		return "Sign in first: p uses your Discord ID and server password, l links this host (nevr-runtime 5.x only)."
+	}
+	return "Sign in first: p signs in with your Discord ID and server password."
 }

@@ -84,29 +84,33 @@ func (a *account) fields() (discordID, password string) {
 	return "", ""
 }
 
-// accountGroups ask how the servers sign in. The device link is the default;
-// the Discord ID and password are only asked for the password sign-in.
+// accountGroups ask how the servers sign in. The password is the default
+// (nevr-runtime 6.x needs it); the device link is offered only with
+// --device-link, and the Discord ID and password only for the password sign-in.
 func accountGroups(a *account) []*huh.Group {
-	a.signIn = "device"
+	a.signIn = "password"
+	linkOn := core.DeviceLinkEnabled()
 	return []*huh.Group{
 		huh.NewGroup(
 			huh.NewSelect[string]().Title("How should the servers sign in?").Options(
-				huh.NewOption("Device link at echovrce.com/device (recommended, no password)", "device"),
-				huh.NewOption("Discord ID and server password", "password"),
+				huh.NewOption("Discord ID and server password (needed for nevr-runtime 6.x)", "password"),
+				huh.NewOption("Device link at echovrce.com/device (nevr-runtime 5.x only)", "device"),
 			).Value(&a.signIn),
 			huh.NewNote().Title("Device link").Description(core.ResetPasswordNote+"\nThe code to approve is shown after the setup; the Discord ID comes from your account."),
-		).Title("EchoVRCE account"),
+		).Title("EchoVRCE account").WithHideFunc(func() bool { return !linkOn }),
 		huh.NewGroup(
+			huh.NewNote().Description(passwordNote),
 			huh.NewInput().Title("Discord user ID").Description("Discord → Settings → Advanced → Developer mode, then copy your ID.").Value(&a.discordID).Validate(digits),
 			huh.NewInput().Title("Server password").Description("The password you set for hosting with the EchoVRCE bot.").EchoMode(huh.EchoModePassword).Value(&a.password).Validate(required("the password")),
-		).Title("Password sign-in").WithHideFunc(func() bool { return a.signIn != "password" }),
+		).Title("EchoVRCE account").WithHideFunc(func() bool { return a.signIn != "password" }),
 	}
 }
 
-// linkIfNoPassword runs the device link when no password was given. If it
-// fails, the busy screen offers to try again.
+// linkIfNoPassword runs the device link when no password was given and the
+// device link is on (core.DeviceLinkEnabled). If it fails, the busy screen
+// offers to try again.
 func linkIfNoPassword(ctx context.Context, app *core.App, a *account, say func(string)) error {
-	if a.signIn == "password" {
+	if a.signIn == "password" || !core.DeviceLinkEnabled() {
 		return nil
 	}
 	say("")

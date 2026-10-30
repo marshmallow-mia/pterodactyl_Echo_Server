@@ -35,9 +35,11 @@ pre-release while there is no stable one; `EVR_VERSION=v2.0.0` picks one) and op
 
 ![The wizard installing a panel](docs/images/ptero-install.svg)
 
-Then you choose how the servers sign in to EchoVRCE: a device link at echovrce.com/device (no password; you approve a
-code and the Discord ID is filled in from your account), or your Discord ID and server password. If the link does not
-complete, press `l` to try again, or later `c` → `l` in the dashboard.
+Then you enter the EchoVRCE host account: your Discord ID and the server password you set for hosting with the
+EchoVRCE bot. nevr-runtime 6.x needs the password: it refuses a server that has only a device link. The device link at
+echovrce.com/device (no password; you approve a code and the Discord ID is filled in from your account) is still there
+for nevr-runtime 5.x, but only with `--device-link` or `EVR_DEVICE_LINK=1` (for example `sudo evr-ptero --device-link`).
+If a link does not complete, press `l` to try again, or later `c` → `l` in the dashboard.
 
 `evr-ptero` then installs everything the panel needs for Echo VR:
 
@@ -69,8 +71,8 @@ forward to a different port number points players at the wrong place.
 /srv/echovr/                    on the node, shared by all servers
   game/34.4.631547.1/           the game, verified
   game/current → …
-  nevr/v5.4.2/                  nevr-runtime (BugSplat64.dll), checksum-verified
-  nevr/current → v5.4.2         switched by updates; servers follow at their next match
+  nevr/v6.6.0/                  nevr-runtime (BugSplat64.dll; from 6.0 also nevr-runtime.dll), checksum-verified
+  nevr/current → v6.6.0         switched by updates; servers follow at their next match
 /etc/evr-ptero/config.yaml      panel connection and server defaults
 /etc/evr-ptero/secrets.env      API keys and the account (mode 0600)
 ```
@@ -84,6 +86,8 @@ forward to a different port number points players at the wrong place.
 - **`evr-supervisor`** runs inside each server and handles the runtime's quirks:
   - It writes the runtime config and the port. nevr-runtime 5.4.2 ignores `-port`, so the port goes into a per-server
     `netconfig_dedicatedserver.json`.
+  - For nevr-runtime 6.x it copies the signed `nevr-runtime.dll` and the config into the server's nEVR root
+    (`.wine/drive_c/users/container/AppData/Local/nevr/echovr` in the server's volume) before each start.
   - It restarts the game after every match, because the runtime exits when a match ends.
   - It detects rejected logins, unreachable ports and stuck registrations.
   - It handles the runtime's shutdown hang, so a stop in the panel takes a few seconds.
@@ -102,10 +106,10 @@ version, and how many matches and restarts it has had.
 | `i` | reinstall a server (runs the egg's install step again) |
 | `U` | updates of evr-ptero, the game files, nevr-runtime, the panel and Wings: install, pick a version, settings |
 | `M` | move servers from an old Echo egg: replace them or keep the panel servers, old logs, deleting the old files (only when the dashboard reports some) |
-| `c` | account: sign-in state and registered servers; `l` links this host at echovrce.com/device, `p` signs in with a password, `o` takes the account from an old installation's game folder |
+| `c` | account: sign-in state and registered servers; `p` signs in with your Discord ID and server password, `o` takes the account from an old installation's game folder (with `--device-link`, `l` links this host at echovrce.com/device) |
 | `m` | more: updates, runtime versions, Discord alerts and the background service, moving servers from an old Echo egg, the panel connection, the panel admin login (show it, set or generate a new password), re-running the setup, the egg files, uninstalling the panel |
 
-A running device link can be cancelled with `esc`, and a failed one retried with `l`.
+With `--device-link`, a running device link can be cancelled with `esc`, and a failed one retried with `l`.
 
 ![The m menu](docs/images/ptero-more.svg)
 
@@ -126,7 +130,7 @@ evr-ptero server edit NAME --tick-rate 90 --regions euw,default
 evr-ptero server start|stop|restart|kill NAME…
 evr-ptero server logs NAME               follow the console
 evr-ptero server reinstall|rm NAME
-evr-ptero account link|set|test|servers  device link (no password) or password sign-in; updates every server
+evr-ptero account set|test|servers  password sign-in; updates every server (account link with --device-link: nevr-runtime 5.x only)
 evr-ptero runtime ls|use TAG|rollback|remove TAG
 evr-ptero update [check|ls|apply|settings]   evr-ptero itself, game files, nevr-runtime, panel, Wings
 evr-ptero agent install|uninstall|run|webhook URL  metrics, Discord alerts, automatic runtime updates
@@ -142,8 +146,9 @@ sudo evr-ptero init --mode install --product pelican --fqdn panel.example.org --
     --tls proxy --email you@example.org --ports 10
 ```
 
-Without `--password-stdin` the setup ends with the device link and prints the code to approve, like the wizard
-(`--no-link` skips it).
+Pass the account with `--discord-id` and `--password-stdin`. Without them the setup ends without a sign-in and says
+so (`evr-ptero account set` adds it later); with `--device-link` it ends with the device link instead and prints the
+code to approve, like the wizard (`--no-link` skips it).
 
 ## Updates
 

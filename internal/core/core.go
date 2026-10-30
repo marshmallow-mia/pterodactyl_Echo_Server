@@ -111,6 +111,9 @@ func (a *App) DeviceLinked() bool {
 
 // LinkDevice runs the echovrce.com/device flow and stores the refresh token.
 func (a *App) LinkDevice(ctx context.Context, show func(url, code string, expires time.Time)) (auth.Session, error) {
+	if !DeviceLinkEnabled() {
+		return auth.Session{}, ErrDeviceLinkOff
+	}
 	c := a.Auth()
 	code, err := c.RequestDevice(ctx)
 	if err != nil {
@@ -166,7 +169,8 @@ func (a *App) refreshDevice(ctx context.Context) (auth.Session, error) {
 }
 
 // installDeviceLink copies the device link into a server's volume, where the
-// runtime looks for it (_local/.credentials.json). Needs Wings on this host.
+// runtime looks for it (_local/.credentials.json; for nevr-runtime 6.x the
+// supervisor copies it into the nEVR root). Needs Wings on this host.
 func (a *App) installDeviceLink(s panel.Server) error {
 	if !a.DeviceLinked() {
 		return nil
@@ -185,6 +189,12 @@ func (a *App) installDeviceLink(s panel.Server) error {
 		return err
 	}
 	if err := os.WriteFile(dst, b, 0o600); err != nil {
+		return err
+	}
+	// nevr-runtime 6.x reads the sign-in from the nEVR root, where the
+	// supervisor copies _local's only when the root has none: drop the root's
+	// old one so the new link reaches it.
+	if err := os.Remove(rootCredentials(vol)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
@@ -723,3 +733,10 @@ func (a *App) Console(ctx context.Context, s Server, line func(string)) error {
 
 // EggSpec returns the egg for the configured image.
 func (a *App) EggSpec() egg.Spec { return egg.Spec{Image: a.Cfg.Image, Version: Version} }
+
+// rootCredentials is the sign-in cache nevr-runtime 6.x reads in a server
+// volume: the nEVR root (%LOCALAPPDATA%\nevr\echovr) of the image's user
+// "container" in the volume's Wine prefix.
+func rootCredentials(vol string) string {
+	return filepath.Join(vol, ".wine", "drive_c", "users", "container", "AppData", "Local", "nevr", "echovr", ".credentials.json")
+}
