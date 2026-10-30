@@ -35,11 +35,11 @@ pre-release while there is no stable one; `EVR_VERSION=v2.0.0` picks one) and op
 
 ![The wizard installing a panel](docs/images/ptero-install.svg)
 
-Then you enter the EchoVRCE host account: your Discord ID and the server password you set for hosting with the
-EchoVRCE bot. nevr-runtime 6.x needs the password: it refuses a server that has only a device link. The device link at
-echovrce.com/device (no password; you approve a code and the Discord ID is filled in from your account) is still there
-for nevr-runtime 5.x, but only with `--device-link` or `EVR_DEVICE_LINK=1` (for example `sudo evr-ptero --device-link`).
-If a link does not complete, press `l` to try again, or later `c` → `l` in the dashboard.
+Then you choose how the servers sign in to EchoVRCE. By default no password is stored: from nevr-runtime 6.9.0 on,
+each server prints a sign-in code on its console in the panel the first time it starts. Open the link it shows (the
+evr-ptero dashboard shows it too), approve it with the host account, and the server keeps the sign-in, so restarts
+don't ask again. A code runs out after 5 minutes and the server then shows a new one. You can also sign in with your
+Discord ID and the server password you set for hosting with the EchoVRCE bot.
 
 `evr-ptero` then installs everything the panel needs for Echo VR:
 
@@ -106,10 +106,8 @@ version, and how many matches and restarts it has had.
 | `i` | reinstall a server (runs the egg's install step again) |
 | `U` | updates of evr-ptero, the game files, nevr-runtime, the panel and Wings: install, pick a version, settings |
 | `M` | move servers from an old Echo egg: replace them or keep the panel servers, old logs, deleting the old files (only when the dashboard reports some) |
-| `c` | account: sign-in state and registered servers; `p` signs in with your Discord ID and server password, `o` takes the account from an old installation's game folder (with `--device-link`, `l` links this host at echovrce.com/device) |
+| `c` | account: sign-in state and registered servers; `p` signs in with your Discord ID and server password, `o` takes the account from an old installation's game folder, `c` goes back to each server's console code |
 | `m` | more: updates, runtime versions, Discord alerts and the background service, moving servers from an old Echo egg, the panel connection, the panel admin login (show it, set or generate a new password), re-running the setup, the egg files, uninstalling the panel |
-
-With `--device-link`, a running device link can be cancelled with `esc`, and a failed one retried with `l`.
 
 ![The m menu](docs/images/ptero-more.svg)
 
@@ -130,7 +128,7 @@ evr-ptero server edit NAME --tick-rate 90 --regions euw,default
 evr-ptero server start|stop|restart|kill NAME…
 evr-ptero server logs NAME               follow the console
 evr-ptero server reinstall|rm NAME
-evr-ptero account set|test|servers  password sign-in; updates every server (account link with --device-link: nevr-runtime 5.x only)
+evr-ptero account code|set|test|servers  console code (default) or password sign-in; updates every server
 evr-ptero runtime ls|use TAG|rollback|remove TAG
 evr-ptero update [check|ls|apply|settings]   evr-ptero itself, game files, nevr-runtime, panel, Wings
 evr-ptero agent install|uninstall|run|webhook URL  metrics, Discord alerts, automatic runtime updates
@@ -146,9 +144,9 @@ sudo evr-ptero init --mode install --product pelican --fqdn panel.example.org --
     --tls proxy --email you@example.org --ports 10
 ```
 
-Pass the account with `--discord-id` and `--password-stdin`. Without them the setup ends without a sign-in and says
-so (`evr-ptero account set` adds it later); with `--device-link` it ends with the device link instead and prints the
-code to approve, like the wizard (`--no-link` skips it).
+Without `--discord-id` and `--password-stdin` each server signs in by the code on its console (nevr-runtime 6.9.0+);
+pass them to sign in with the password instead (`evr-ptero account set` adds it later, `evr-ptero account code` goes
+back).
 
 ## Updates
 
@@ -246,6 +244,9 @@ game folder on its own: account screen → `o`, or `evr-ptero account set --from
   - `bad_credentials`: the backend rejected the Discord ID or password.
   - `udp_unreachable`: the backend could not reach the game port; check the 1:1 port forward.
   - `registration_rejected`: the server did not register in time.
+  - `sign_in`: a server without a password could not get a sign-in code from EchoVRCE; it tries again.
+- A server in **approve code** state waits for its sign-in: open the link in its console or in the dashboard and approve
+  it with the host account.
 - Under Proxmox LXC, Docker needs `nesting=1,keyctl=1`.
 - Can't log in to the panel? `m` → Panel admin login and password (or `sudo evr-ptero panel login --show-password`)
   shows the admin login; set a new password there or with `evr-ptero panel password`. "Forgot password" in the panel

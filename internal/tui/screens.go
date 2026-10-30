@@ -17,6 +17,7 @@ import (
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/game"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/config"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/status"
 	ui "github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/tui"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/update"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/agent"
@@ -87,8 +88,20 @@ func (m *Model) updateAccount(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.passwordForm()
 	case "o":
 		return m, m.oldGameForm()
+	case "c":
+		if m.App != nil && !m.App.SignsInByCode() {
+			return m, m.useSignInCode()
+		}
 	}
 	return m, nil
+}
+
+// useSignInCode drops the password and updates every server.
+func (m *Model) useSignInCode() tea.Cmd {
+	app := m.App
+	return m.Run("Switching to the console sign-in code", func(ctx context.Context, say func(string)) error {
+		return app.UseSignInCode(ctx, say)
+	}, func() tea.Cmd { return m.openAccount() })
 }
 
 // oldGameForm takes the account from an old game folder's _local config.
@@ -161,6 +174,23 @@ func (m *Model) renderAccount() string {
 	switch {
 	case a == nil:
 		b.WriteString(m.spin.View() + " signing in …\n")
+	case errors.Is(a.err, core.ErrSignInByCode):
+		b.WriteString("No password stored: " + m.wrap(core.SignInCodeNote, 0) + ".\n\n")
+		waiting := 0
+		for _, s := range m.servers {
+			if st := s.Status; st != nil && st.State == status.StateAwaitingApproval {
+				fmt.Fprintf(&b, "  %s waits: %s\n", s.Name(), st.SignInURL)
+				waiting++
+			}
+		}
+		if waiting > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("Press " + ui.KeyStyle.Render("p") + " to sign in with your Discord ID and server password instead,\n")
+		b.WriteString("or " + ui.KeyStyle.Render("o") + " to take them from an old installation's game folder.\n")
+		if linkOn {
+			b.WriteString("Or press " + ui.KeyStyle.Render("l") + " to link this host at echovrce.com/device (old, nevr-runtime 5.x only).\n")
+		}
 	case errors.Is(a.err, core.ErrNoAccount):
 		b.WriteString(ui.Warning.Render("Not signed in yet: the servers cannot register with EchoVRCE.") + "\n\n")
 		b.WriteString("Press " + ui.KeyStyle.Render("p") + " to sign in with your Discord ID and server password,\n")
@@ -192,6 +222,9 @@ func (m *Model) renderAccount() string {
 		}
 	}
 	keys := []ui.Key{ui.K("p", "password sign-in"), ui.K("o", "from old install")}
+	if m.App != nil && !m.App.SignsInByCode() {
+		keys = append(keys, ui.K("c", "console code instead"))
+	}
 	if linkOn {
 		keys = append(keys, ui.K("l", "link this host"))
 	}
@@ -637,7 +670,9 @@ func (m *Model) migrateForm(msg legacyMsg) tea.Cmd {
 	// Without an account the move signs in first, preferably with the one the old servers used.
 	acct, discordID, password := "", "", ""
 	var old core.LegacyAccount
-	needAccount := !app.HasAccount()
+	// No password stored: the moved servers can sign in by their console code,
+	// or with the account the old ones used.
+	needAccount := app.SignsInByCode()
 	if needAccount {
 		var found bool
 		old, found = app.FindLegacyAccount(msg.list)
@@ -682,6 +717,8 @@ func (m *Model) migrateForm(msg legacyMsg) tea.Cmd {
 					switch acct {
 					case "legacy":
 						err = app.UseLegacyAccount(ctx, old, say)
+					case "code":
+						say("No password stored: " + core.SignInCodeNote + ".")
 					case "password":
 						_, err = app.UsePassword(ctx, discordID, password, say)
 					case "link":
@@ -846,18 +883,21 @@ func (m *Model) panelLoginForm() tea.Cmd {
 }
 
 // passwordNote says where the server password comes from.
-const passwordNote = "nevr-runtime 6.x signs in with the host account's Discord ID and server password\n(set it for hosting with the EchoVRCE bot); it refuses a server that has only a device link."
+const passwordNote = "Optional: the host account's Discord ID and the server password you set for hosting\nwith the EchoVRCE bot. Without one, each server shows its own sign-in code (nevr-runtime 6.9.0+)."
 
-// migrateAccountOptions are the sign-ins a move without an account offers, and
-// the default: the old servers' account if there is one, else the password.
+// migrateAccountOptions are the sign-ins a move without a password offers,
+// and the default: the old servers' account if there is one, else each
+// server's console code.
 func migrateAccountOptions(old core.LegacyAccount, found bool) ([]huh.Option[string], string) {
 	var opts []huh.Option[string]
-	def := "password"
+	def := "code"
 	if found {
 		def = "legacy"
 		opts = append(opts, huh.NewOption(fmt.Sprintf("The old servers' account (Discord ID %s, from %s)", old.DiscordID, old.Dir), "legacy"))
 	}
-	opts = append(opts, huh.NewOption("Discord ID and server password", "password"))
+	opts = append(opts,
+		huh.NewOption("Sign-in code on each server's console (nevr-runtime 6.9.0+)", "code"),
+		huh.NewOption("Discord ID and server password", "password"))
 	if core.DeviceLinkEnabled() {
 		opts = append(opts, huh.NewOption("Link this host at echovrce.com/device (nevr-runtime 5.x only)", "link"))
 	}

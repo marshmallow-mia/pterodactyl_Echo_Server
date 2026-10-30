@@ -246,7 +246,7 @@ func (a *App) Removable(list []LegacyServer, f LegacyFiles) []Removal {
 // (see MigrateRecreate and MigrateKeep), then moves or deletes the old logs
 // and deletes what opts.Remove lists. The account comes from evr-ptero's secrets.
 func (a *App) MigrateServers(ctx context.Context, list []LegacyServer, f LegacyFiles, opts MigrateOptions, say func(string)) error {
-	if m := a.Secrets.MissingAccount(a.DeviceLinked()); len(m) > 0 {
+	if m := a.Secrets.Missing(); len(m) > 0 {
 		return fmt.Errorf("%w (%v missing)", ErrNoAccount, m)
 	}
 	if err := opts.Validate(); err != nil {

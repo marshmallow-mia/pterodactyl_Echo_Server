@@ -324,16 +324,15 @@ func (s Secrets) Save(dir string) error {
 // DeviceFile holds the echovrce.com device link (refresh token), 0600.
 const DeviceFile = "device.json"
 
-// MissingAccount lists missing EchoVRCE account secrets. With a device link
-// the password is optional.
-func (s Secrets) MissingAccount(deviceLinked bool) []string {
-	var out []string
-	for _, k := range []string{config.EnvDiscordID, config.EnvPassword} {
-		if s[k] == "" && !(k == config.EnvPassword && deviceLinked) {
-			out = append(out, k)
-		}
+// Missing lists the account secrets a password sign-in still lacks: the
+// Discord ID. Without a password nothing is missing: from nevr-runtime v6.9.0
+// on each server signs in by a code it prints on its console (a 5.x server by
+// a device link made earlier).
+func (s Secrets) Missing() []string {
+	if s[config.EnvPassword] != "" && s[config.EnvDiscordID] == "" {
+		return []string{config.EnvDiscordID}
 	}
-	return out
+	return nil
 }
 
 func writeAtomic(path string, data []byte, mode os.FileMode) error {

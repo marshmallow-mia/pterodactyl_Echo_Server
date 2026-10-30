@@ -89,10 +89,13 @@ func (a *App) Auth() *auth.Client {
 
 // Login checks the EchoVRCE account.
 func (a *App) Login(ctx context.Context) (auth.Session, error) {
-	if a.Secrets[config.EnvPassword] == "" && a.DeviceLinked() {
-		return a.refreshDevice(ctx) // also fills in a missing Discord ID
+	if a.Secrets[config.EnvPassword] == "" {
+		if a.DeviceLinked() {
+			return a.refreshDevice(ctx) // also fills in a missing Discord ID
+		}
+		return auth.Session{}, ErrSignInByCode
 	}
-	if m := a.Secrets.MissingAccount(a.DeviceLinked()); len(m) > 0 {
+	if m := a.Secrets.Missing(); len(m) > 0 {
 		return auth.Session{}, fmt.Errorf("%w (%v missing)", ErrNoAccount, m)
 	}
 	return a.Auth().Login(ctx, a.Secrets[config.EnvDiscordID], a.Secrets[config.EnvPassword])
@@ -453,7 +456,7 @@ func (a *App) CreateServers(ctx context.Context, n int, set instance.Settings, s
 			return nil, err
 		}
 	}
-	if m := a.Secrets.MissingAccount(a.DeviceLinked()); len(m) > 0 {
+	if m := a.Secrets.Missing(); len(m) > 0 {
 		return nil, fmt.Errorf("%w (%v missing)", ErrNoAccount, m)
 	}
 	set = a.Cfg.Defaults.Merge(set)

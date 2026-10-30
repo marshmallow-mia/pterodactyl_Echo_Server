@@ -121,11 +121,11 @@ func migrateCmd(g *globals) *cobra.Command {
 					fmt.Fprintf(w, "Old cron job: %s\n", l)
 				}
 				switch {
-				case a.HasAccount():
+				case !a.SignsInByCode():
 				case found:
 					fmt.Fprintf(w, "Account in %s: Discord ID %s (migrate run uses it)\n", acc.Dir, acc.DiscordID)
 				default:
-					fmt.Fprintln(w, "No account found in the old game files; sign in before migrate run.")
+					fmt.Fprintln(w, "No account found in the old game files: the moved servers sign in by their console code (nevr-runtime v6.9.0+).")
 				}
 			})
 		},
@@ -195,13 +195,15 @@ func migrateCmd(g *globals) *cobra.Command {
 			if !g.confirm(fmt.Sprintf("Move these %d server(s) now?", len(sel))) {
 				return errors.New("cancelled (use --yes)")
 			}
-			if !a.HasAccount() {
-				acc, found := a.FindLegacyAccount(list)
-				if !found {
-					return fmt.Errorf("%w; none was found in the old game files", core.ErrNoAccount)
-				}
-				if err := a.UseLegacyAccount(cmd.Context(), acc, func(s string) { g.say("%s", s) }); err != nil {
-					return err
+			// No password stored: take the old servers' account, or let each
+			// moved server sign in by its console code.
+			if a.SignsInByCode() {
+				if acc, found := a.FindLegacyAccount(list); found {
+					if err := a.UseLegacyAccount(cmd.Context(), acc, func(s string) { g.say("%s", s) }); err != nil {
+						return err
+					}
+				} else {
+					g.say("No password stored: %s.", core.SignInCodeNote)
 				}
 			}
 			return a.MigrateServers(cmd.Context(), sel, files, opts, func(s string) { g.say("%s", s) })

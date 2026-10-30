@@ -19,6 +19,7 @@ import (
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/instance"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/auth"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/status"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/supervisor"
 	ui "github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/tui"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/updates"
@@ -429,6 +430,9 @@ func (m *Model) refresh() {
 			if st.LastError != "" && (s.State() == "failed" || s.State() == "backoff") {
 				note = st.LastError
 			}
+			if s.State() == string(status.StateAwaitingApproval) {
+				note = "approve: " + st.SignInURL
+			}
 		}
 		rows = append(rows, table.Row{s.Name(), s.Panel.Identifier, strconv.Itoa(s.Port), ui.StateLabel(s.State()), rt, reg, matches, note})
 	}
@@ -736,16 +740,34 @@ func (m *Model) render() string {
 	if m.loadErr != nil {
 		body += "\n" + ui.Error.Render(m.loadErr.Error())
 	}
+	body += m.approvalDetail()
 	body += m.updatesNotice()
 	if n := len(m.legacy); n > 0 && len(m.servers) > 0 {
 		body += "\n" + ui.Warning.Render(fmt.Sprintf("%d server(s) still on an old Echo egg: press ", n)) + ui.KeyStyle.Render("M") + ui.Warning.Render(" to move them")
 	}
 	if !m.App.HasAccount() {
-		body += "\n" + ui.Warning.Render("The servers have no EchoVRCE sign-in yet: press ") + ui.KeyStyle.Render("c") + ui.Warning.Render(" to link this host.")
+		body += "\n" + ui.Warning.Render("The servers have no EchoVRCE sign-in yet: press ") + ui.KeyStyle.Render("c") + ui.Warning.Render(" to sign in.")
 	}
 	return m.header() + "\n\n" + body + "\n" + m.footer(
 		ui.K("enter", "console"), ui.K("s", "start"), ui.K("x", "stop"), ui.K("r", "restart"), ui.K("K", "kill"),
 		ui.K("a", "add"), ui.K("e", "edit"), ui.K("i", "reinstall"), ui.K("d", "delete"), ui.K("c", "account"), ui.K("U", "updates"), ui.K("m", "more"), ui.K("q", "quit"))
+}
+
+// approvalDetail names the servers that wait for their sign-in code.
+func (m *Model) approvalDetail() string {
+	var b strings.Builder
+	for _, s := range m.servers {
+		if s.Status == nil || s.State() != string(status.StateAwaitingApproval) {
+			continue
+		}
+		until := ""
+		if !s.Status.SignInExpires.IsZero() {
+			until = " by " + s.Status.SignInExpires.Local().Format("15:04")
+		}
+		// Never cut: the link is what the host opens.
+		b.WriteString("\n" + ui.Warning.Render(fmt.Sprintf("%s waits for its sign-in: approve it with the host account%s at ", s.Name(), until)) + s.Status.SignInURL)
+	}
+	return b.String()
 }
 
 // signInFirst is the flash for an action that needs a sign-in.
