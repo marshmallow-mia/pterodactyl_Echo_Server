@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/instance"
@@ -19,7 +20,27 @@ var (
 	ErrNoAccount = errors.New("the servers have no EchoVRCE sign-in yet")
 	// ErrNotSetUp means the panel was not prepared for Echo VR servers.
 	ErrNotSetUp = errors.New("the panel is not set up for Echo VR servers yet")
+	// ErrDeviceLinkOff means a device link was asked for without the switch.
+	ErrDeviceLinkOff = errors.New("the device link is off (nevr-runtime 6.x refuses a server that has only a device link); run with --device-link or " + DeviceLinkEnv + "=1 to link this host anyway")
 )
+
+// DeviceLinkFlow turns the echovrce.com/device sign-in on (--device-link).
+// nevr-runtime 6.x refuses a server that has only a device link, so the
+// password is the sign-in and a new link is offered or made only with this
+// switch or DeviceLinkEnv. A link that is already stored keeps working.
+var DeviceLinkFlow bool
+
+// DeviceLinkEnv turns the device link on like --device-link ("1" or "true").
+const DeviceLinkEnv = "EVR_DEVICE_LINK"
+
+// DeviceLinkEnabled reports whether new device links are offered.
+func DeviceLinkEnabled() bool {
+	if DeviceLinkFlow {
+		return true
+	}
+	on, _ := strconv.ParseBool(os.Getenv(DeviceLinkEnv))
+	return on
+}
 
 // HasAccount reports whether the servers can sign in: a device link (the
 // Discord ID is filled in at the next sign-in), or a Discord ID with a password.

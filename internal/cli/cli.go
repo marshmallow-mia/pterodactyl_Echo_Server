@@ -60,6 +60,7 @@ you can import egg/egg-echovr-nevr.json yourself and manage everything in the pa
 		},
 	}
 	root.PersistentFlags().StringVar(&g.dir, "config-dir", pcfg.Dir(), "configuration directory")
+	root.PersistentFlags().BoolVar(&core.DeviceLinkFlow, "device-link", false, "offer the echovrce.com/device sign-in (nevr-runtime 5.x only; also "+core.DeviceLinkEnv+"=1)")
 	root.PersistentPreRun = func(*cobra.Command, []string) { panelinstall.SetStateDir(g.dir) }
 	root.PersistentFlags().BoolVar(&g.json, "json", false, "print JSON")
 	root.PersistentFlags().BoolVarP(&g.yes, "yes", "y", false, "do not ask for confirmation")
@@ -82,7 +83,10 @@ func hintFor(err error) string {
 	case errors.Is(err, pcfg.ErrNotInitialized):
 		return "Set up with: evr-ptero (the wizard) or evr-ptero init --help"
 	case errors.Is(err, core.ErrNoAccount):
-		return "Sign in with: evr-ptero account link (no password), or evr-ptero account set (Discord ID and password)"
+		if core.DeviceLinkEnabled() {
+			return "Sign in with: evr-ptero account set (Discord ID and server password), or evr-ptero account link --device-link (nevr-runtime 5.x only)"
+		}
+		return "Sign in with: evr-ptero account set (Discord ID and server password)"
 	case errors.Is(err, core.ErrNotSetUp):
 		return "Prepare the panel with: evr-ptero panel setup"
 	}
@@ -194,7 +198,7 @@ create the mounts yourself when asked.`,
 	f.StringVar(&o.Account.DiscordID, "discord-id", "", "EchoVRCE host account Discord ID")
 	f.StringVar(&o.Account.HTTPKey, "http-key", "", "EchoVRCE backend HTTP key (default: the public key)")
 	f.BoolVar(&passwordStdin, "password-stdin", false, "read the EchoVRCE password from stdin")
-	f.BoolVar(&noLink, "no-link", false, "without a password: do not link this host at echovrce.com/device now")
+	f.BoolVar(&noLink, "no-link", false, "with --device-link and no password: do not link this host at echovrce.com/device now")
 	cmd.AddCommand(setup)
 	panelInstallCmds(g, cmd)
 	cmd.AddCommand(panelPasswordCmd(g), panelLoginCmd(g))
@@ -477,6 +481,9 @@ func accountCmd(g *globals) *cobra.Command {
 	var discordID, httpKey, gameDir string
 	var passwordStdin, applyAll, noPassword bool
 	link := func(cmd *cobra.Command, a *core.App) error {
+		if !core.DeviceLinkEnabled() {
+			return core.ErrDeviceLinkOff
+		}
 		g.say("%s\n", core.ResetPasswordNote)
 		_, err := a.UseDeviceLink(cmd.Context(), func(url, code string, expires time.Time) {
 			g.say("Open %s and approve the code %s (valid until %s).", url, code, expires.Local().Format(time.TimeOnly))
@@ -537,18 +544,21 @@ func accountCmd(g *globals) *cobra.Command {
 	set.Flags().StringVar(&discordID, "discord-id", "", "Discord user ID")
 	set.Flags().StringVar(&httpKey, "http-key", "", "backend HTTP key (default: the public key nevr-runtime embeds)")
 	set.Flags().BoolVar(&passwordStdin, "password-stdin", false, "read the password from stdin")
-	set.Flags().BoolVar(&noPassword, "no-password", false, "no password: link this host at echovrce.com/device instead (same as account link)")
+	set.Flags().BoolVar(&noPassword, "no-password", false, "with --device-link: link this host at echovrce.com/device instead (same as account link)")
 	set.Flags().StringVar(&gameDir, "from-game-dir", "", "take the account from an old game directory's _local/config.yaml or config.json")
 	set.Flags().BoolVar(&applyAll, "apply", false, "")
 	_ = set.Flags().MarkDeprecated("apply", "every server is always updated now")
 	cmd.AddCommand(set)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "link",
-		Short: "Link this host at echovrce.com/device (sign in without a password)",
+		Short: "Link this host at echovrce.com/device (needs --device-link; nevr-runtime 5.x only)",
 		Long: `Shows a short code to approve at echovrce.com/device, stores the resulting
 refresh token in /etc/evr-ptero/device.json and takes the Discord ID from the
 backend account. A stored password is removed, and every server gets the link
-in its _local/.credentials.json (running ones restart).`,
+in its _local/.credentials.json (running ones restart).
+
+nevr-runtime 6.x refuses a server that has only a device link, so this runs
+only with --device-link or EVR_DEVICE_LINK=1.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := g.app()
 			if err != nil {

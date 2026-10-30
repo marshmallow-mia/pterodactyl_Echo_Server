@@ -111,6 +111,9 @@ func (a *App) DeviceLinked() bool {
 
 // LinkDevice runs the echovrce.com/device flow and stores the refresh token.
 func (a *App) LinkDevice(ctx context.Context, show func(url, code string, expires time.Time)) (auth.Session, error) {
+	if !DeviceLinkEnabled() {
+		return auth.Session{}, ErrDeviceLinkOff
+	}
 	c := a.Auth()
 	code, err := c.RequestDevice(ctx)
 	if err != nil {

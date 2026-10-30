@@ -80,7 +80,9 @@ func (m *Model) updateAccount(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "r":
 		return m, m.openAccount()
 	case "l":
-		return m, m.linkDevice()
+		if core.DeviceLinkEnabled() {
+			return m, m.linkDevice()
+		}
 	case "p":
 		return m, m.passwordForm()
 	case "o":
@@ -139,8 +141,7 @@ func (m *Model) passwordForm() tea.Cmd {
 	app := m.App
 	discordID, password := app.Secrets[config.EnvDiscordID], ""
 	f := huh.NewForm(huh.NewGroup(
-		huh.NewNote().Title("Password sign-in").Description("Use this if your EchoVRCE account has a server password.\n"+
-			"Without one, go back and press l to link this host instead."),
+		huh.NewNote().Title("Password sign-in").Description(passwordNote),
 		huh.NewInput().Title("Discord user ID").Description("Discord → Settings → Advanced → Developer mode, then copy your ID.").Value(&discordID).Validate(digits),
 		huh.NewInput().Title("Server password").Description("The password you set for hosting with the EchoVRCE bot.").EchoMode(huh.EchoModePassword).Value(&password).Validate(required("the password")),
 	).Title("EchoVRCE account"))
@@ -153,6 +154,7 @@ func (m *Model) passwordForm() tea.Cmd {
 }
 
 func (m *Model) renderAccount() string {
+	linkOn := core.DeviceLinkEnabled()
 	var b strings.Builder
 	b.WriteString(m.header() + "  " + ui.Bold.Render("account") + "\n\n")
 	a := m.account
@@ -161,13 +163,20 @@ func (m *Model) renderAccount() string {
 		b.WriteString(m.spin.View() + " signing in …\n")
 	case errors.Is(a.err, core.ErrNoAccount):
 		b.WriteString(ui.Warning.Render("Not signed in yet: the servers cannot register with EchoVRCE.") + "\n\n")
-		b.WriteString("Press " + ui.KeyStyle.Render("l") + " to link this host at echovrce.com/device (recommended, no password).\n")
-		b.WriteString(ui.Subtle.Render(m.wrap(core.ResetPasswordNote, 0)) + "\n\n")
-		b.WriteString("Or press " + ui.KeyStyle.Render("p") + " to sign in with your Discord ID and server password,\n")
+		b.WriteString("Press " + ui.KeyStyle.Render("p") + " to sign in with your Discord ID and server password,\n")
 		b.WriteString("or " + ui.KeyStyle.Render("o") + " to take them from an old installation's game folder.\n")
+		b.WriteString(ui.Subtle.Render(m.wrap(passwordNote, 0)) + "\n")
+		if linkOn {
+			b.WriteString("\nOr press " + ui.KeyStyle.Render("l") + " to link this host at echovrce.com/device (nevr-runtime 5.x only).\n")
+			b.WriteString(ui.Subtle.Render(m.wrap(core.ResetPasswordNote, 0)) + "\n")
+		}
 	case a.err != nil:
 		b.WriteString(ui.Error.Render(m.wrap(a.err.Error(), 0)) + "\n\n")
-		b.WriteString(ui.Subtle.Render("Press l to link this host again, or p to use a password.") + "\n")
+		if linkOn {
+			b.WriteString(ui.Subtle.Render("Press p to use a password, or l to link this host again.") + "\n")
+		} else {
+			b.WriteString(ui.Subtle.Render("Press p to sign in with your Discord ID and server password.") + "\n")
+		}
 	default:
 		method := "device link"
 		if m.App.Secrets[config.EnvPassword] != "" {
@@ -182,7 +191,11 @@ func (m *Model) renderAccount() string {
 			fmt.Fprintf(&b, "  %s  %-12s %-11s players %d\n", s.CreatedAt.Local().Format(time.DateTime), s.Region, s.LobbyType, s.Players)
 		}
 	}
-	return b.String() + m.footer(ui.K("l", "link this host"), ui.K("p", "password sign-in"), ui.K("o", "from old install"), ui.K("r", "refresh"), ui.K("esc", "back"))
+	keys := []ui.Key{ui.K("p", "password sign-in"), ui.K("o", "from old install")}
+	if linkOn {
+		keys = append(keys, ui.K("l", "link this host"))
+	}
+	return b.String() + m.footer(append(keys, ui.K("r", "refresh"), ui.K("esc", "back"))...)
 }
 
 // The "more" menu.
@@ -629,16 +642,7 @@ func (m *Model) migrateForm(msg legacyMsg) tea.Cmd {
 		var found bool
 		old, found = app.FindLegacyAccount(msg.list)
 		var aopts []huh.Option[string]
-		if found {
-			acct = "legacy"
-			aopts = append(aopts, huh.NewOption(fmt.Sprintf("The old servers' account (Discord ID %s, from %s)", old.DiscordID, old.Dir), "legacy"))
-		}
-		aopts = append(aopts,
-			huh.NewOption("Link this host at echovrce.com/device (no password)", "link"),
-			huh.NewOption("Discord ID and server password", "password"))
-		if acct == "" {
-			acct = "link"
-		}
+		aopts, acct = migrateAccountOptions(old, found)
 		groups = append(groups,
 			huh.NewGroup(huh.NewSelect[string]().Title("EchoVRCE account for the moved servers").Options(aopts...).Value(&acct)).
 				WithHideFunc(notMoving),
@@ -839,4 +843,23 @@ func (m *Model) panelLoginForm() tea.Cmd {
 			return nil
 		}, nil)
 	})
+}
+
+// passwordNote says where the server password comes from.
+const passwordNote = "nevr-runtime 6.x signs in with the host account's Discord ID and server password\n(set it for hosting with the EchoVRCE bot); it refuses a server that has only a device link."
+
+// migrateAccountOptions are the sign-ins a move without an account offers, and
+// the default: the old servers' account if there is one, else the password.
+func migrateAccountOptions(old core.LegacyAccount, found bool) ([]huh.Option[string], string) {
+	var opts []huh.Option[string]
+	def := "password"
+	if found {
+		def = "legacy"
+		opts = append(opts, huh.NewOption(fmt.Sprintf("The old servers' account (Discord ID %s, from %s)", old.DiscordID, old.Dir), "legacy"))
+	}
+	opts = append(opts, huh.NewOption("Discord ID and server password", "password"))
+	if core.DeviceLinkEnabled() {
+		opts = append(opts, huh.NewOption("Link this host at echovrce.com/device (nevr-runtime 5.x only)", "link"))
+	}
+	return opts, def
 }
