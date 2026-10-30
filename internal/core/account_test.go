@@ -61,7 +61,8 @@ func TestUsePasswordReplacesDeviceLink(t *testing.T) {
 
 	device := filepath.Join(dir, pcfg.DeviceFile)
 	creds := filepath.Join(wings, "s-1", "root", "_local", ".credentials.json")
-	for _, p := range []string{device, creds} {
+	rootCreds := rootCredentials(filepath.Join(wings, "s-1")) // nevr-runtime 6.x's copy in the nEVR root
+	for _, p := range []string{device, creds, rootCreds} {
 		os.MkdirAll(filepath.Dir(p), 0o755)
 		os.WriteFile(p, []byte(`{"refresh_token":"r"}`), 0o600)
 	}
@@ -87,6 +88,9 @@ func TestUsePasswordReplacesDeviceLink(t *testing.T) {
 	if _, err := os.Stat(creds); !os.IsNotExist(err) {
 		t.Error("server still has the device link")
 	}
+	if _, err := os.Stat(rootCreds); !os.IsNotExist(err) {
+		t.Error("server's nEVR root still has the device link")
+	}
 	if env[config.EnvPassword] != "pw" || env[config.EnvDiscordID] != "123" || env["NEVR_REGIONS"] != "euw" {
 		t.Errorf("server env %v", env)
 	}
@@ -96,5 +100,11 @@ func TestUsePasswordReplacesDeviceLink(t *testing.T) {
 	}
 	if len(said) != 2 {
 		t.Errorf("progress %q", said)
+	}
+}
+
+func TestRootCredentials(t *testing.T) {
+	if got, want := rootCredentials("/v/s-1"), "/v/s-1/.wine/drive_c/users/container/AppData/Local/nevr/echovr/.credentials.json"; got != want {
+		t.Errorf("got %s want %s", got, want)
 	}
 }

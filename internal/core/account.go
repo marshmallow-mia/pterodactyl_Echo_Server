@@ -92,9 +92,11 @@ func (a *App) ApplyAccount(ctx context.Context, say func(string)) error {
 // removeDeviceLink deletes a device link from a server's volume, so a
 // password sign-in is not shadowed by an old link.
 func (a *App) removeDeviceLink(s panel.Server) error {
-	err := os.Remove(filepath.Join(a.Cfg.Panel.WingsData, s.UUID, "root", "_local", ".credentials.json"))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
+	vol := filepath.Join(a.Cfg.Panel.WingsData, s.UUID)
+	for _, p := range []string{filepath.Join(vol, "root", "_local", ".credentials.json"), rootCredentials(vol)} {
+		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 	}
-	return err
+	return nil
 }

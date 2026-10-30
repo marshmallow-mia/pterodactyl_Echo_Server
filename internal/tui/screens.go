@@ -424,7 +424,7 @@ func (m *Model) channelForm() tea.Cmd {
 			huh.NewConfirm().Title("Update automatically?").Description("Needs the background service (More → Discord alerts and the background service).").Value(&auto),
 		).Title("Runtime updates"),
 		huh.NewGroup(
-			huh.NewInput().Title("Pinned version").Description("e.g. v5.4.2").Value(&pinned).Validate(required("the version")),
+			huh.NewInput().Title("Pinned version").Description("e.g. v6.6.0").Value(&pinned).Validate(required("the version")),
 		).WithHideFunc(func() bool { return channel != "pinned" }),
 	)
 	return m.ShowForm(f, func() tea.Cmd {

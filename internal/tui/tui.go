@@ -596,7 +596,7 @@ func (m *Model) editForm(s core.Server) tea.Cmd {
 		huh.NewInput().Title("Guilds").Description("Guild IDs to host for; empty = all the account may host.").Value(&guilds),
 		huh.NewInput().Title("Tick rate (Hz)").Value(&tick).Validate(intRange(10, 1000)),
 		huh.NewInput().Title("Empty server TTL (seconds)").Description("0 keeps the runtime's default.").Value(&ttl).Validate(intRange(0, 86400)),
-		huh.NewInput().Title("nevr-runtime").Description(`"current" follows the node; or a tag like v5.4.2.`).Value(&runtime),
+		huh.NewInput().Title("nevr-runtime").Description(`"current" follows the node; or a tag like v6.6.0.`).Value(&runtime),
 		huh.NewConfirm().Title("Restart now if it is running?").Description("Otherwise the change applies at its next restart.").Value(&restart),
 	).Title("Edit " + s.Name()))
 	app := m.App

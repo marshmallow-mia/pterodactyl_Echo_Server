@@ -37,13 +37,13 @@ type Spec struct {
 func Variables() []Variable {
 	return []Variable{
 		{"Discord ID", "Discord user ID of the EchoVRCE host account.", "NEVR_DISCORD_ID", "", false, false, []string{"required", "string", "regex:/^[0-9]{5,25}$/"}},
-		{"Server password", "Password of the EchoVRCE host account. Only admins can see or change it. Leave empty when the node uses a device link (evr-ptero account link).", "NEVR_PASSWORD", "", false, false, []string{"nullable", "string", "max:200"}},
+		{"Server password", "Password of the EchoVRCE host account. Only admins can see or change it. Required for nevr-runtime 6.x, which refuses a device link alone; leave empty only for a 5.x server on a device link (evr-ptero account link).", "NEVR_PASSWORD", "", false, false, []string{"nullable", "string", "max:200"}},
 		{"Backend HTTP key", "http_key for the EchoVRCE backend. Empty uses the public key nevr-runtime embeds.", "NEVR_HTTP_KEY", "", false, false, []string{"nullable", "string", "max:200"}},
 		{"Regions", "Comma-separated regions this server offers itself for, e.g. euw. Empty uses the backend's default.", "NEVR_REGIONS", "", true, true, []string{"nullable", "string", "max:200", "regex:/^[A-Za-z0-9_,-]*$/"}},
 		{"Guilds", "Comma-separated guild IDs to host for. Empty hosts for every guild the account may host.", "NEVR_GUILDS", "", false, false, []string{"nullable", "string", "max:2000"}},
 		{"Tick rate", "Server tick rate in Hz (10-1000).", "NEVR_TICK_RATE", "120", true, false, []string{"required", "integer", "between:10,1000"}},
 		{"Empty server TTL", "Seconds an empty server waits before it returns to the lobby (0 = immediately).", "NEVR_EMPTY_TTL", "0", true, false, []string{"required", "integer", "between:0,86400"}},
-		{"nevr-runtime version", `"current" follows the node's current runtime (updated by evr-ptero); or pin a tag like v5.4.2.`, "NEVR_VERSION", "current", true, false, []string{"required", "string", "regex:/^(current)?(v[0-9]+\\.[0-9]+\\.[0-9]+[0-9A-Za-z.-]*)?$/"}},
+		{"nevr-runtime version", `"current" follows the node's current runtime (updated by evr-ptero); or pin a tag like v6.6.0.`, "NEVR_VERSION", "current", true, false, []string{"required", "string", "regex:/^(current)?(v[0-9]+\\.[0-9]+\\.[0-9]+[0-9A-Za-z.-]*)?$/"}},
 		{"Publisher lock", "Game publisher lock; the EchoVRCE backend expects echovrce.", "NEVR_PUBLISHER_LOCK", "echovrce", false, false, []string{"required", "string", "max:50"}},
 		{"Game files", `"mount" uses the node's shared read-only files (/srv/echovr, set up by evr-ptero); "download" installs a private copy (about 5 GB) into this server.`, "GAME_SOURCE", "mount", false, false, []string{"required", "string", "in:mount,download"}},
 		{"Console output", `"default" hides the runtime's noisy diagnostics, "all" shows everything.`, "EVR_LOG", "default", true, true, []string{"required", "string", "in:default,all"}},
