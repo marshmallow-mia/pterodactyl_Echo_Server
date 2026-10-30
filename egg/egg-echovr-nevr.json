@@ -11,7 +11,7 @@
     "docker_images": {
         "Echo VR nevr": "ghcr.io/marshmallow-mia/echovr-pterodactyl:edge"
     },
-    "exported_at": "2026-10-30T09:41:07Z",
+    "exported_at": "2026-10-30T14:37:51Z",
     "features": null,
     "file_denylist": [],
     "meta": {
@@ -30,17 +30,17 @@
     "variables": [
         {
             "name": "Discord ID",
-            "description": "Discord user ID of the EchoVRCE host account.",
+            "description": "Discord user ID of the EchoVRCE host account; needed only with the server password. Leave both empty: the console shows a sign-in code to approve at echovrce.com/device (nevr-runtime 6.9.0+).",
             "env_variable": "NEVR_DISCORD_ID",
             "default_value": "",
             "user_viewable": false,
             "user_editable": false,
-            "rules": "required|string|regex:/^[0-9]{5,25}$/",
+            "rules": "nullable|string|regex:/^[0-9]{5,25}$/",
             "field_type": "text"
         },
         {
             "name": "Server password",
-            "description": "Password of the EchoVRCE host account. Only admins can see or change it. Required for nevr-runtime 6.x, which refuses a device link alone; leave empty only for a 5.x server on a device link (evr-ptero --device-link account link).",
+            "description": "Password of the EchoVRCE host account (optional). Only admins can see or change it. Leave empty: the console shows a sign-in code to approve at echovrce.com/device with the host account, and the server keeps the sign-in (nevr-runtime 6.9.0+).",
             "env_variable": "NEVR_PASSWORD",
             "default_value": "",
             "user_viewable": false,

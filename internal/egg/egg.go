@@ -36,8 +36,8 @@ type Spec struct {
 // Variables lists the egg's variables; names avoid Pelican's reserved ones.
 func Variables() []Variable {
 	return []Variable{
-		{"Discord ID", "Discord user ID of the EchoVRCE host account.", "NEVR_DISCORD_ID", "", false, false, []string{"required", "string", "regex:/^[0-9]{5,25}$/"}},
-		{"Server password", "Password of the EchoVRCE host account. Only admins can see or change it. Required for nevr-runtime 6.x, which refuses a device link alone; leave empty only for a 5.x server on a device link (evr-ptero --device-link account link).", "NEVR_PASSWORD", "", false, false, []string{"nullable", "string", "max:200"}},
+		{"Discord ID", "Discord user ID of the EchoVRCE host account; needed only with the server password. Leave both empty: the console shows a sign-in code to approve at echovrce.com/device (nevr-runtime 6.9.0+).", "NEVR_DISCORD_ID", "", false, false, []string{"nullable", "string", "regex:/^[0-9]{5,25}$/"}},
+		{"Server password", "Password of the EchoVRCE host account (optional). Only admins can see or change it. Leave empty: the console shows a sign-in code to approve at echovrce.com/device with the host account, and the server keeps the sign-in (nevr-runtime 6.9.0+).", "NEVR_PASSWORD", "", false, false, []string{"nullable", "string", "max:200"}},
 		{"Backend HTTP key", "http_key for the EchoVRCE backend. Empty uses the public key nevr-runtime embeds.", "NEVR_HTTP_KEY", "", false, false, []string{"nullable", "string", "max:200"}},
 		{"Regions", "Comma-separated regions this server offers itself for, e.g. euw. Empty uses the backend's default.", "NEVR_REGIONS", "", true, true, []string{"nullable", "string", "max:200", "regex:/^[A-Za-z0-9_,-]*$/"}},
 		{"Guilds", "Comma-separated guild IDs to host for. Empty hosts for every guild the account may host.", "NEVR_GUILDS", "", false, false, []string{"nullable", "string", "max:2000"}},

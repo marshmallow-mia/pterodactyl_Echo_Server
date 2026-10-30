@@ -59,13 +59,16 @@ func addInstallFlags(cmd *cobra.Command, f *installFlags) {
 	fl.BoolVar(&f.noLink, "no-link", false, "with --device-link and no password: do not link this host at echovrce.com/device now")
 }
 
-// linkAfterSetup links the host at echovrce.com/device when the setup left the
-// servers without a sign-in and the device link is on, like the wizard does.
+// linkAfterSetup says how the servers sign in after a setup without a
+// password: by each server's console code, or, with the device link on, by
+// linking the host at echovrce.com/device now.
 func linkAfterSetup(cmd *cobra.Command, g *globals, app *core.App, noLink bool) error {
 	switch {
-	case app.HasAccount():
-	case !core.DeviceLinkEnabled():
+	case !app.HasAccount():
 		g.say("No EchoVRCE sign-in yet. Sign in with: evr-ptero account set (Discord ID and server password)")
+	case !app.SignsInByCode():
+	case !core.DeviceLinkEnabled():
+		g.say("\nNo password given: %s.\nEach server's console in the panel shows its code; evr-ptero account set signs in with a password instead.", core.SignInCodeNote)
 	case noLink:
 		g.say("No EchoVRCE sign-in yet. Link this host later with: evr-ptero account link --device-link")
 	default:

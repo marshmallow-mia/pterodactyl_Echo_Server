@@ -60,7 +60,8 @@ you can import egg/egg-echovr-nevr.json yourself and manage everything in the pa
 		},
 	}
 	root.PersistentFlags().StringVar(&g.dir, "config-dir", pcfg.Dir(), "configuration directory")
-	root.PersistentFlags().BoolVar(&core.DeviceLinkFlow, "device-link", false, "offer the echovrce.com/device sign-in (nevr-runtime 5.x only; also "+core.DeviceLinkEnv+"=1)")
+	root.PersistentFlags().BoolVar(&core.DeviceLinkFlow, "device-link", false, "offer the old host-wide echovrce.com/device link (nevr-runtime 5.x only; also "+core.DeviceLinkEnv+"=1)")
+	_ = root.PersistentFlags().MarkHidden("device-link")
 	root.PersistentPreRun = func(*cobra.Command, []string) { panelinstall.SetStateDir(g.dir) }
 	root.PersistentFlags().BoolVar(&g.json, "json", false, "print JSON")
 	root.PersistentFlags().BoolVarP(&g.yes, "yes", "y", false, "do not ask for confirmation")
@@ -83,10 +84,9 @@ func hintFor(err error) string {
 	case errors.Is(err, pcfg.ErrNotInitialized):
 		return "Set up with: evr-ptero (the wizard) or evr-ptero init --help"
 	case errors.Is(err, core.ErrNoAccount):
-		if core.DeviceLinkEnabled() {
-			return "Sign in with: evr-ptero account set (Discord ID and server password), or evr-ptero account link --device-link (nevr-runtime 5.x only)"
-		}
-		return "Sign in with: evr-ptero account set (Discord ID and server password)"
+		return "Sign in with: evr-ptero account set (Discord ID and server password), or evr-ptero account code (each server's console code, nevr-runtime v6.9.0+)"
+	case errors.Is(err, core.ErrSignInByCode):
+		return "Each server's console in the panel shows its code; evr-ptero account set signs in with a password instead"
 	case errors.Is(err, core.ErrNotSetUp):
 		return "Prepare the panel with: evr-ptero panel setup"
 	}
@@ -477,7 +477,7 @@ func dash(s string) string {
 }
 
 func accountCmd(g *globals) *cobra.Command {
-	cmd := &cobra.Command{Use: "account", Short: "EchoVRCE host account"}
+	cmd := &cobra.Command{Use: "account", Short: "EchoVRCE host account: console code or password, test and list registered servers"}
 	var discordID, httpKey, gameDir string
 	var passwordStdin, applyAll, noPassword bool
 	link := func(cmd *cobra.Command, a *core.App) error {
@@ -504,7 +504,7 @@ func accountCmd(g *globals) *cobra.Command {
 				}
 			}
 			if noPassword {
-				return link(cmd, a)
+				return a.UseSignInCode(cmd.Context(), func(s string) { g.say("%s", s) })
 			}
 			id, pw := discordID, ""
 			if gameDir != "" {
@@ -544,21 +544,37 @@ func accountCmd(g *globals) *cobra.Command {
 	set.Flags().StringVar(&discordID, "discord-id", "", "Discord user ID")
 	set.Flags().StringVar(&httpKey, "http-key", "", "backend HTTP key (default: the public key nevr-runtime embeds)")
 	set.Flags().BoolVar(&passwordStdin, "password-stdin", false, "read the password from stdin")
-	set.Flags().BoolVar(&noPassword, "no-password", false, "with --device-link: link this host at echovrce.com/device instead (same as account link)")
+	set.Flags().BoolVar(&noPassword, "no-password", false, "remove the password: each server signs in by its console code (same as account code)")
 	set.Flags().StringVar(&gameDir, "from-game-dir", "", "take the account from an old game directory's _local/config.yaml or config.json")
 	set.Flags().BoolVar(&applyAll, "apply", false, "")
 	_ = set.Flags().MarkDeprecated("apply", "every server is always updated now")
 	cmd.AddCommand(set)
 	cmd.AddCommand(&cobra.Command{
-		Use:   "link",
-		Short: "Link this host at echovrce.com/device (needs --device-link; nevr-runtime 5.x only)",
+		Use: "code", Short: "Sign in by the code each server prints on its console instead of a password (nevr-runtime v6.9.0+)",
+		Long: `Removes the stored password and Discord ID and updates every server
+(running ones restart). Each server then prints a sign-in code on its console
+in the panel at its next start: approve it at echovrce.com/device with the
+host account. The server keeps the sign-in, so a restart does not ask again.`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			a, err := g.app()
+			if err != nil {
+				return err
+			}
+			return a.UseSignInCode(cmd.Context(), func(s string) { g.say("%s", s) })
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:    "link",
+		Hidden: true,
+		Short:  "Link this host at echovrce.com/device (old, nevr-runtime 5.x only; needs --device-link)",
 		Long: `Shows a short code to approve at echovrce.com/device, stores the resulting
 refresh token in /etc/evr-ptero/device.json and takes the Discord ID from the
 backend account. A stored password is removed, and every server gets the link
 in its _local/.credentials.json (running ones restart).
 
-nevr-runtime 6.x refuses a server that has only a device link, so this runs
-only with --device-link or EVR_DEVICE_LINK=1.`,
+Only nevr-runtime 5.x servers use this link, so this runs only with
+--device-link or EVR_DEVICE_LINK=1. From v6.9.0 on use evr-ptero account code:
+each server shows its own sign-in code.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := g.app()
 			if err != nil {

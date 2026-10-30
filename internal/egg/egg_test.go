@@ -70,3 +70,26 @@ func TestRenderFormats(t *testing.T) {
 		t.Errorf("plcn meta %v", e["meta"])
 	}
 }
+
+// Without a password the servers sign in by their console code (nevr-runtime
+// v6.9.0+), so neither the password nor the Discord ID may be required.
+func TestAccountVariablesAreOptional(t *testing.T) {
+	seen := 0
+	for _, v := range Variables() {
+		if v.Env != "NEVR_DISCORD_ID" && v.Env != "NEVR_PASSWORD" {
+			continue
+		}
+		seen++
+		for _, r := range v.Rules {
+			if r == "required" {
+				t.Errorf("%s is required", v.Env)
+			}
+		}
+		if !strings.Contains(v.Rules[0], "nullable") || !strings.Contains(v.Description, "sign-in code") {
+			t.Errorf("%s: rules %v, description %q", v.Env, v.Rules, v.Description)
+		}
+	}
+	if seen != 2 {
+		t.Fatalf("found %d account variables", seen)
+	}
+}
