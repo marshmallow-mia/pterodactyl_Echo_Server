@@ -7,12 +7,14 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/instance"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/auth"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/config"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/panel"
+	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/pcfg"
 )
 
 var (
@@ -123,12 +125,14 @@ func (a *App) UsePassword(ctx context.Context, discordID, password string, say f
 
 // ApplyAccount gives every Echo VR server the stored account: the egg
 // variables, the device link in its volume (or none), and a restart if it runs.
-// With the console code a server's own sign-in in its nEVR root is kept.
+// With the console code a server's own sign-in in its nEVR root is kept. A
+// server in a match restarts only once the match has ended.
 func (a *App) ApplyAccount(ctx context.Context, say func(string)) error {
 	list, err := a.Servers(ctx)
 	if err != nil {
 		return err
 	}
+	var inMatch []Server
 	for _, s := range list {
 		switch {
 		case a.DeviceLinked():
@@ -141,16 +145,84 @@ func (a *App) ApplyAccount(ctx context.Context, say func(string)) error {
 		if err != nil {
 			return fmt.Errorf("%s: %w", s.Name(), err)
 		}
-		if err := a.UpdateServer(ctx, s, func(*instance.Settings) {}, true); err != nil {
+		if err := a.UpdateServer(ctx, s, func(*instance.Settings) {}, false); err != nil {
 			return fmt.Errorf("%s: %w", s.Name(), err)
 		}
-		if s.Power == "running" {
-			say(s.Name() + ": updated, restarting")
-		} else {
+		switch {
+		case s.Power != "running" || a.Secrets[pcfg.SecretClientKey] == "":
 			say(s.Name() + ": updated")
+		case s.Busy():
+			inMatch = append(inMatch, s)
+			say(s.Name() + ": updated; in a match, restarts when it ends")
+		default:
+			if err := a.Panel().Power(ctx, s.Panel.Identifier, "restart"); err != nil {
+				return fmt.Errorf("%s: %w", s.Name(), err)
+			}
+			say(s.Name() + ": updated, restarting")
+		}
+	}
+	return a.restartAfterMatch(ctx, inMatch, say)
+}
+
+// MatchWait is how long ApplyAccount waits for matches to end, and
+// matchPoll how often it looks.
+var (
+	MatchWait = 45 * time.Minute
+	matchPoll = 5 * time.Second
+)
+
+// restartAfterMatch restarts each server once it no longer hosts a match. One
+// that stops meanwhile takes the new settings when it starts again.
+func (a *App) restartAfterMatch(ctx context.Context, waiting []Server, say func(string)) error {
+	deadline := time.Now().Add(MatchWait)
+	for len(waiting) > 0 {
+		select {
+		case <-ctx.Done():
+			return stillInMatch(waiting, ctx.Err())
+		case <-time.After(matchPoll):
+		}
+		list, err := a.Servers(ctx)
+		if err != nil {
+			if time.Now().After(deadline) {
+				return stillInMatch(waiting, err)
+			}
+			continue
+		}
+		now := map[string]Server{}
+		for _, s := range list {
+			now[s.Panel.UUID] = s
+		}
+		var left []Server
+		for i, w := range waiting {
+			s, ok := now[w.Panel.UUID]
+			switch {
+			case !ok || s.Power != "running":
+				say(w.Name() + ": stopped; it uses the new account when it starts")
+			case s.Busy():
+				left = append(left, s)
+			default:
+				if err := a.Panel().Power(ctx, s.Panel.Identifier, "restart"); err != nil {
+					return stillInMatch(append(left, waiting[i:]...), err)
+				}
+				say(s.Name() + ": match over, restarting")
+			}
+		}
+		waiting = left
+		if len(waiting) > 0 && time.Now().After(deadline) {
+			return stillInMatch(waiting, fmt.Errorf("matches still running after %s", MatchWait))
 		}
 	}
 	return nil
+}
+
+// stillInMatch says which servers still run with the old account.
+func stillInMatch(list []Server, err error) error {
+	names := make([]string, len(list))
+	for i, s := range list {
+		names[i] = s.Name()
+	}
+	return fmt.Errorf("%s not restarted (%w): they keep the old account until \"evr-ptero server restart\" after their match",
+		strings.Join(names, ", "), err)
 }
 
 // removeLegacyLink deletes an old device link from a server's _local only.
