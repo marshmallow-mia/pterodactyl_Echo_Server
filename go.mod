@@ -8,7 +8,7 @@ require (
 	charm.land/huh/v2 v2.0.3
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/coder/websocket v1.8.15
-	github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.0-rc.6
+	github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/term v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
