@@ -92,7 +92,7 @@ func (a *account) fields() (discordID, password string) {
 func accountGroups(a *account) []*huh.Group {
 	a.signIn = "code"
 	opts := []huh.Option[string]{
-		huh.NewOption("Sign-in code on each server's console (nevr-runtime 6.9.0+, no password stored)", "code"),
+		huh.NewOption("Sign-in code on each server's console (6.9.0+, no password stored)", "code"),
 		huh.NewOption("Discord ID and server password", "password"),
 	}
 	if core.DeviceLinkEnabled() {
@@ -101,7 +101,12 @@ func accountGroups(a *account) []*huh.Group {
 	return []*huh.Group{
 		huh.NewGroup(
 			huh.NewSelect[string]().Title("How should the servers sign in?").Options(opts...).Value(&a.signIn),
-			huh.NewNote().Description("Without a password, "+core.SignInCodeNote+".\nThe dashboard shows the link while a server waits."),
+			// Broken by hand to fit an 80-column terminal: huh sizes a note before
+			// wrapping it and cuts the rest.
+			huh.NewNote().Description("Without a password, each server prints a sign-in code on its console\n"+
+				"the first time it starts (nevr-runtime 6.9.0+). Approve it at\n"+
+				"echovrce.com/device with the host account; the server keeps the\n"+
+				"sign-in. The dashboard shows the link meanwhile."),
 		).Title("EchoVRCE account"),
 		huh.NewGroup(
 			huh.NewNote().Description(passwordNote),

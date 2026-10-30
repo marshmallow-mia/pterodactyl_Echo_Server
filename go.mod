@@ -9,7 +9,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/coder/websocket v1.8.15
-	github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.1-0.20261030145911-9c928f143c72
+	github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.0.1-0.20261030151751-fee1695b8b7a
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/term v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
