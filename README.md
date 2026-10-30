@@ -36,7 +36,8 @@ pre-release while there is no stable one; `EVR_VERSION=v2.0.0` picks one) and op
 ![The wizard installing a panel](docs/images/ptero-install.svg)
 
 Then you choose how the servers sign in to EchoVRCE: a device link at echovrce.com/device (no password; you approve a
-code and the Discord ID is filled in from your account), or your Discord ID and server password. If the link does not
+code and the Discord ID is filled in from your account), or your Discord ID and server password. nevr-runtime 6.x
+needs the password: it refuses a server that has only a device link. If the link does not
 complete, press `l` to try again, or later `c` → `l` in the dashboard.
 
 `evr-ptero` then installs everything the panel needs for Echo VR:
@@ -69,8 +70,8 @@ forward to a different port number points players at the wrong place.
 /srv/echovr/                    on the node, shared by all servers
   game/34.4.631547.1/           the game, verified
   game/current → …
-  nevr/v5.4.2/                  nevr-runtime (BugSplat64.dll), checksum-verified
-  nevr/current → v5.4.2         switched by updates; servers follow at their next match
+  nevr/v6.6.0/                  nevr-runtime (BugSplat64.dll; from 6.0 also nevr-runtime.dll), checksum-verified
+  nevr/current → v6.6.0         switched by updates; servers follow at their next match
 /etc/evr-ptero/config.yaml      panel connection and server defaults
 /etc/evr-ptero/secrets.env      API keys and the account (mode 0600)
 ```
@@ -84,6 +85,8 @@ forward to a different port number points players at the wrong place.
 - **`evr-supervisor`** runs inside each server and handles the runtime's quirks:
   - It writes the runtime config and the port. nevr-runtime 5.4.2 ignores `-port`, so the port goes into a per-server
     `netconfig_dedicatedserver.json`.
+  - For nevr-runtime 6.x it copies the signed `nevr-runtime.dll` and the config into the server's nEVR root
+    (`.wine/drive_c/users/container/AppData/Local/nevr/echovr` in the server's volume) before each start.
   - It restarts the game after every match, because the runtime exits when a match ends.
   - It detects rejected logins, unreachable ports and stuck registrations.
   - It handles the runtime's shutdown hang, so a stop in the panel takes a few seconds.
