@@ -313,6 +313,12 @@ func (s Server) State() string {
 	return string(s.Status.State)
 }
 
+// Busy reports whether the server hosts a match (or is shutting down), so a
+// restart now would drop players.
+func (s Server) Busy() bool {
+	return s.Status != nil && !s.Status.Stale(time.Now(), 15*time.Second) && !s.Status.State.Idle()
+}
+
 // Servers lists the panel servers that use the Echo VR egg.
 func (a *App) Servers(ctx context.Context) ([]Server, error) {
 	p := a.Panel()

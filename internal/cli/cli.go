@@ -552,9 +552,10 @@ func accountCmd(g *globals) *cobra.Command {
 	cmd.AddCommand(&cobra.Command{
 		Use: "code", Short: "Sign in by the code each server prints on its console instead of a password (nevr-runtime v6.9.0+)",
 		Long: `Removes the stored password and Discord ID and updates every server
-(running ones restart). Each server then prints a sign-in code on its console
-in the panel at its next start: approve it at echovrce.com/device with the
-host account. The server keeps the sign-in, so a restart does not ask again.`,
+(idle ones restart now, one in a match once it ends). Each server then
+prints a sign-in code on its console in the panel at its next start:
+approve it at echovrce.com/device with the host account. The server keeps
+the sign-in, so a restart does not ask again.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := g.app()
 			if err != nil {
