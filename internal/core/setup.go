@@ -33,6 +33,9 @@ type SetupOptions struct {
 	OwnerID    int
 	SkipFiles  bool
 	Account    struct{ DiscordID, Password, HTTPKey string }
+	// AutoUpdates keeps evr-ptero, nevr-runtime and the servers' mods up to
+	// date by themselves (the default); false only notifies, nil keeps the config's.
+	AutoUpdates *bool
 }
 
 // WingsConfig is the part of Wings' config.yml evr-ptero reads.
@@ -84,6 +87,9 @@ func Setup(ctx context.Context, dir string, o SetupOptions, say func(step, detai
 	set(&cfg.DataDir, o.DataDir)
 	set(&cfg.Image, o.Image)
 	set(&cfg.GameSource, o.GameSource)
+	if o.AutoUpdates != nil {
+		cfg.SetAutoUpdates(*o.AutoUpdates)
+	}
 	set(&cfg.Panel.BindIP, o.BindIP)
 	set(&cfg.Panel.Alias, o.Alias)
 	if o.AppKey != "" {

@@ -236,8 +236,9 @@ func (m *Model) renderAccount() string {
 func (m *Model) menu() tea.Cmd {
 	choice := "updates"
 	opts := []huh.Option[string]{
-		huh.NewOption("Updates (evr-ptero, game files, nevr-runtime, panel, Wings)", "updates"),
+		huh.NewOption("Updates (evr-ptero, game files, nevr-runtime, mods, panel, Wings)", "updates"),
 		huh.NewOption("Runtime versions", "runtime"),
+		huh.NewOption("Server mods", "mods"),
 		huh.NewOption("Discord alerts and the background service", "alerts"),
 		huh.NewOption("EchoVRCE account", "account"),
 		huh.NewOption("Move servers from an old Echo egg", "migrate"),
@@ -256,6 +257,8 @@ func (m *Model) menu() tea.Cmd {
 			return m.openUpdates()
 		case "runtime":
 			return m.openRuntime()
+		case "mods":
+			return m.modsMenu()
 		case "alerts":
 			return m.alertsForm()
 		case "account":

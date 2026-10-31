@@ -21,7 +21,8 @@ import (
 )
 
 // Components are the parts evr-ptero updates: itself, the node's shared game
-// files, nevr-runtime, and the panel and Wings when they run on this host.
+// files, nevr-runtime, the servers' mods, and the panel and Wings when they
+// run on this host.
 func Components(app *core.App, log func(string)) []updates.Component {
 	comps := []updates.Component{
 		&updates.Self{U: &selfupdate.Updater{Repo: core.Repo, Binary: "evr-ptero", Current: core.Version}, After: PostUpdate(app.Dir)},
@@ -33,6 +34,7 @@ func Components(app *core.App, log func(string)) []updates.Component {
 	comps = append(comps, &updates.Runtime{U: Updater(app, log), Policy: func() update.Policy {
 		return update.Policy{Channel: app.Cfg.Runtime.Channel, Pinned: app.Cfg.Runtime.Pinned}
 	}})
+	comps = append(comps, &updates.Mods{Host: app.ModHost, Servers: app.ModServers})
 	if inst, err := panelinstall.DetectInstalled(); err == nil {
 		if inst.Dir != "" && inst.Panel != "" {
 			comps = append(comps, &Panel{app: app, in: inst})

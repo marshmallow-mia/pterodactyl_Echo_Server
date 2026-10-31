@@ -143,6 +143,7 @@ func installForm(m *Model) tea.Cmd {
 	httpPort, httpsPorts, wingsPort, ports := "80", "443", "8080", "10"
 	var alias, adminPassword, adminAgain string
 	acct := &account{}
+	auto := true
 	f := huh.NewForm(append([]*huh.Group{
 		huh.NewGroup(
 			huh.NewSelect[string]().Title("Panel").Options(
@@ -197,7 +198,7 @@ func installForm(m *Model) tea.Cmd {
 			huh.NewInput().Title("Game ports to allocate from 6792").Value(&ports).Validate(intRange(1, 200)),
 			huh.NewInput().Title("Public IP (optional)").Description("Shown as allocation alias.").Value(&alias),
 		),
-	}, accountGroups(acct)...)...)
+	}, append(accountGroups(acct), autoUpdatesGroup(&auto))...)...)
 	return m.ShowForm(f, func() tea.Cmd {
 		o.Product, o.Channel = "pterodactyl", "stable"
 		switch product {
@@ -223,7 +224,7 @@ func installForm(m *Model) tea.Cmd {
 				say(fmt.Sprintf("Panel ready at %s, login %s with your password", res.URL, res.AdminEmail))
 			}
 			say("(m → Panel admin login shows or changes it later)")
-			so := core.SetupOptions{URL: res.URL, APIURL: res.APIURL, AppKey: res.AppKey, ClientKey: res.ClientKey, NodeID: res.NodeID, Alias: alias, Ports: n}
+			so := core.SetupOptions{URL: res.URL, APIURL: res.APIURL, AppKey: res.AppKey, ClientKey: res.ClientKey, NodeID: res.NodeID, Alias: alias, Ports: n, AutoUpdates: &auto}
 			so.Account.DiscordID, so.Account.Password = acct.fields()
 			so.Account.HTTPKey = acct.httpKey
 			app, err := core.Setup(ctx, m.Dir, so, func(step, detail string) { say(step + ": " + detail) })
@@ -240,6 +241,7 @@ func connectForm(m *Model, local bool) tea.Cmd {
 	var url, appKey, clientKey, bindIP, alias string
 	ports := "10"
 	acct := &account{}
+	auto := true
 	desc := "Admin → Application API (Pterodactyl) or Admin → API Keys (Pelican)."
 	if local {
 		desc = "The panel runs here: leave the keys empty and they are created for you."
@@ -253,11 +255,11 @@ func connectForm(m *Model, local bool) tea.Cmd {
 			huh.NewInput().Title("Public IP (optional)").Value(&alias),
 			huh.NewInput().Title("Game ports to allocate from 6792").Value(&ports).Validate(intRange(1, 200)),
 		).Title("Use an existing panel"),
-	}, accountGroups(acct)...)...)
+	}, append(accountGroups(acct), autoUpdatesGroup(&auto))...)...)
 	return m.ShowForm(f, func() tea.Cmd {
 		n, _ := strconv.Atoi(ports)
 		return m.Run("Preparing the panel", func(ctx context.Context, say func(string)) error {
-			so := core.SetupOptions{URL: url, AppKey: appKey, ClientKey: clientKey, BindIP: bindIP, Alias: alias, Ports: n}
+			so := core.SetupOptions{URL: url, AppKey: appKey, ClientKey: clientKey, BindIP: bindIP, Alias: alias, Ports: n, AutoUpdates: &auto}
 			so.Account.DiscordID, so.Account.Password = acct.fields()
 			so.Account.HTTPKey = acct.httpKey
 			app, err := core.Setup(ctx, m.Dir, so, func(step, detail string) { say(step + ": " + detail) })
@@ -268,4 +270,15 @@ func connectForm(m *Model, local bool) tea.Cmd {
 			return linkIfNoPassword(ctx, app, acct, say)
 		}, func() tea.Cmd { return m.LoadServers() })
 	})
+}
+
+// autoUpdatesGroup asks once whether evr-ptero, nevr-runtime and the mods
+// update themselves (yes unless turned off).
+func autoUpdatesGroup(on *bool) *huh.Group {
+	return huh.NewGroup(
+		huh.NewConfirm().Title("Keep evr-ptero, nevr-runtime and the mods up to date automatically?").
+			Description("New versions are tried on one idle server first and installed at match boundaries.\n" +
+				"No: you get a notice and install them yourself (Updates, U).").
+			Value(on).Affirmative("Yes").Negative("No"),
+	).Title("Updates")
 }

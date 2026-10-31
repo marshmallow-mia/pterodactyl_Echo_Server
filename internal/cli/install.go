@@ -23,7 +23,16 @@ type installFlags struct {
 	ports             int
 	passwordStdin     bool
 	noLink            bool
+	autoUpdates       bool
 	account           struct{ discordID, httpKey, password string }
+}
+
+// auto is --auto-updates when it was given (nil keeps the config's or the default).
+func (f *installFlags) auto(cmd *cobra.Command) *bool {
+	if cmd.Flags().Changed("auto-updates") {
+		return &f.autoUpdates
+	}
+	return nil
 }
 
 func addInstallFlags(cmd *cobra.Command, f *installFlags) {
@@ -57,6 +66,7 @@ func addInstallFlags(cmd *cobra.Command, f *installFlags) {
 	fl.StringVar(&f.account.httpKey, "http-key", "", "EchoVRCE backend HTTP key (default: the public key)")
 	fl.BoolVar(&f.passwordStdin, "password-stdin", false, "read the EchoVRCE password from stdin")
 	fl.BoolVar(&f.noLink, "no-link", false, "with --device-link and no password: do not link this host at echovrce.com/device now")
+	fl.BoolVar(&f.autoUpdates, "auto-updates", true, "keep evr-ptero, nevr-runtime and the servers' mods up to date automatically (false: only notify)")
 }
 
 // linkAfterSetup says how the servers sign in after a setup without a
@@ -114,7 +124,7 @@ func runInstall(cmd *cobra.Command, g *globals, f *installFlags) error {
 	if bind == "" {
 		bind = core.MainIP()
 	}
-	o := core.SetupOptions{URL: res.URL, APIURL: res.APIURL, AppKey: res.AppKey, ClientKey: res.ClientKey, NodeID: res.NodeID, BindIP: bind, Alias: f.alias, Ports: f.ports}
+	o := core.SetupOptions{URL: res.URL, APIURL: res.APIURL, AppKey: res.AppKey, ClientKey: res.ClientKey, NodeID: res.NodeID, BindIP: bind, Alias: f.alias, Ports: f.ports, AutoUpdates: f.auto(cmd)}
 	o.Account.DiscordID, o.Account.HTTPKey, o.Account.Password = f.account.discordID, f.account.httpKey, f.account.password
 	g.say("")
 	app, err := core.Setup(cmd.Context(), g.dir, o, g.step)
@@ -185,7 +195,7 @@ func initCmd(g *globals) *cobra.Command {
 			case "install":
 				return runInstall(cmd, g, f)
 			case "connect":
-				o := core.SetupOptions{URL: url, AppKey: appKey, ClientKey: clientKey, BindIP: f.bindIP, Alias: f.alias, Ports: f.ports}
+				o := core.SetupOptions{URL: url, AppKey: appKey, ClientKey: clientKey, BindIP: f.bindIP, Alias: f.alias, Ports: f.ports, AutoUpdates: f.auto(cmd)}
 				o.Account.DiscordID, o.Account.HTTPKey = f.account.discordID, f.account.httpKey
 				if f.passwordStdin {
 					p, err := readSecret("EchoVRCE server password: ")

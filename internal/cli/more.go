@@ -281,7 +281,7 @@ func agentCmd(g *globals) *cobra.Command {
 
 // component finds an updatable part by name.
 func component(comps []updates.Component, name string) (updates.Component, error) {
-	alias := map[string]string{"evr-ptero": "self", "nevr-runtime": "runtime", "nevr": "runtime"}
+	alias := map[string]string{"evr-ptero": "self", "nevr-runtime": "runtime", "nevr": "runtime", "mod": "mods"}
 	if a, ok := alias[name]; ok {
 		name = a
 	}
@@ -334,9 +334,10 @@ func updateCmd(g *globals) *cobra.Command {
 	}
 	cmd := &cobra.Command{
 		Use:   "update",
-		Short: "Updates of evr-ptero itself, the game files, nevr-runtime, the panel and Wings",
+		Short: "Updates of evr-ptero itself, the game files, nevr-runtime, the servers' mods, the panel and Wings",
 		Long: `Without a subcommand: check every part. Parts: self (evr-ptero), game (the
 node's shared game files; repairs them from the mirror), runtime (nevr-runtime,
+tried on one idle server first), mods (new versions of the servers' mods, also
 tried on one idle server first), panel and wings (when they run on this host;
 the panel is backed up first and restored if the update fails).
 "update settings" chooses per part: off, notify (check and alert) or auto
@@ -411,7 +412,7 @@ the panel is backed up first and restored if the update fails).
 	apply.Flags().StringVar(&version, "version", "", "version to install (default: the newest; see update ls)")
 	apply.Flags().BoolVar(&dry, "dry-run", false, "panel and wings: print the commands instead of running them")
 	cmd.AddCommand(apply)
-	var self, game, rt, pnl, wings, window, channel string
+	var self, game, rt, md, pnl, wings, window, channel string
 	var hours int
 	settings := &cobra.Command{
 		Use: "settings", Short: "Show or change how each part is updated",
@@ -426,7 +427,7 @@ the panel is backed up first and restored if the update fails).
 				flag string
 				dst  *string
 				val  string
-			}{{"self", &u.Self, self}, {"game", &u.Game, game}, {"runtime", &u.Runtime, rt}, {"panel", &u.Panel, pnl}, {"wings", &u.Wings, wings},
+			}{{"self", &u.Self, self}, {"game", &u.Game, game}, {"runtime", &u.Runtime, rt}, {"mods", &u.Mods, md}, {"panel", &u.Panel, pnl}, {"wings", &u.Wings, wings},
 				{"window", &u.Window, window}, {"panel-channel", &u.PanelChannel, channel}} {
 				if fl.Changed(f.flag) {
 					*f.dst = f.val
@@ -441,8 +442,8 @@ the panel is backed up first and restored if the update fails).
 				}
 			}
 			return g.print(u, func(w io.Writer) {
-				fmt.Fprintf(w, "self:          %s\ngame:          %s\nruntime:       %s\npanel:         %s\nwings:         %s\npanel channel: %s\nwindow:        %s\ncheck every:   %s\n",
-					u.Self, u.Game, u.Runtime, u.Panel, u.Wings, dash(u.PanelChannel), dash(u.Window), a.Cfg.Updates.Settings().Interval())
+				fmt.Fprintf(w, "self:          %s\ngame:          %s\nruntime:       %s\nmods:          %s\npanel:         %s\nwings:         %s\npanel channel: %s\nwindow:        %s\ncheck every:   %s\n",
+					u.Self, u.Game, u.Runtime, u.Mods, u.Panel, u.Wings, dash(u.PanelChannel), dash(u.Window), a.Cfg.Updates.Settings().Interval())
 				if !agent.ServiceInstalled() {
 					fmt.Fprintln(w, "\nThe agent is not installed: nothing is checked or installed in the background (evr-ptero agent install).")
 				}
@@ -453,7 +454,7 @@ the panel is backed up first and restored if the update fails).
 	for _, f := range []struct {
 		dst        *string
 		name, what string
-	}{{&self, "self", "evr-ptero itself"}, {&game, "game", "the shared game files"}, {&rt, "runtime", "nevr-runtime"}, {&pnl, "panel", "the panel"}, {&wings, "wings", "Wings"}} {
+	}{{&self, "self", "evr-ptero itself"}, {&game, "game", "the shared game files"}, {&rt, "runtime", "nevr-runtime"}, {&md, "mods", "the servers' mods"}, {&pnl, "panel", "the panel"}, {&wings, "wings", "Wings"}} {
 		sf.StringVar(f.dst, f.name, "", f.what+": off, notify or auto")
 	}
 	sf.StringVar(&window, "window", "", `automatic installs only in this local time window, e.g. 04:00-06:00 ("" = any time)`)

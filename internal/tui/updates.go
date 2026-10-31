@@ -126,6 +126,7 @@ var updateWhat = map[string]string{
 	"self":    "evr-ptero is replaced (checksum-verified, the old one kept as .prev) and restarts; the egg and the servers move to the new image (each server at its next restart).",
 	"game":    "Missing or changed files are fetched from the mirror and verified; servers use them from their next restart.",
 	"runtime": "The version is tried on one idle server first; only if it registers do the others switch, at their next match boundary.",
+	"mods":    "New mod versions are tried on one idle server first; only if it registers with all of them loaded do the others get them, at their next match boundary.",
 	"panel":   "The panel and its database are backed up to " + panelinstall.BackupDir + ", the panel goes into maintenance mode for a minute or two, then the new version is installed and migrated. If it does not answer afterwards, the backup is restored.",
 	"wings":   "Wings is replaced and restarted; game servers keep running. If it does not come back, the old version is put back.",
 }
@@ -208,6 +209,7 @@ func (m *Model) updateSettingsForm() tea.Cmd {
 		mode("evr-ptero itself", "", &u.Self),
 		mode("Game files", "Repairs missing or changed files from the mirror.", &u.Game),
 		mode("nevr-runtime", "Tried on one idle server first, then rolled out at match boundaries.", &u.Runtime),
+		mode("Server mods", "New versions are tried on one idle server first, then rolled out at match boundaries.", &u.Mods),
 	}
 	var panelFields []huh.Field
 	for _, c := range agent.Components(app, nil) {

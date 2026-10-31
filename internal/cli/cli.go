@@ -65,7 +65,7 @@ you can import egg/egg-echovr-nevr.json yourself and manage everything in the pa
 	root.PersistentPreRun = func(*cobra.Command, []string) { panelinstall.SetStateDir(g.dir) }
 	root.PersistentFlags().BoolVar(&g.json, "json", false, "print JSON")
 	root.PersistentFlags().BoolVarP(&g.yes, "yes", "y", false, "do not ask for confirmation")
-	root.AddCommand(initCmd(g), panelCmd(g), eggCmd(g), filesCmd(g), serverCmd(g), accountCmd(g), runtimeCmd(g), migrateCmd(g), agentCmd(g), updateCmd(g), postUpdateCmd(g))
+	root.AddCommand(initCmd(g), panelCmd(g), eggCmd(g), filesCmd(g), serverCmd(g), accountCmd(g), runtimeCmd(g), migrateCmd(g), agentCmd(g), updateCmd(g), postUpdateCmd(g), modsCmd(g))
 	if err := root.ExecuteContext(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		if hint := hintFor(err); hint != "" {
@@ -157,7 +157,7 @@ func splitList(s string) []string {
 func panelCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{Use: "panel", Short: "Connect to and prepare the panel"}
 	var o core.SetupOptions
-	var passwordStdin, noLink bool
+	var passwordStdin, noLink, autoUpdates bool
 	setup := &cobra.Command{
 		Use:   "setup",
 		Short: "Prepare the panel: API keys, node, shared files, egg, mounts, allocations",
@@ -174,6 +174,9 @@ create the mounts yourself when asked.`,
 					return err
 				}
 				o.Account.Password = p
+			}
+			if cmd.Flags().Changed("auto-updates") {
+				o.AutoUpdates = &autoUpdates
 			}
 			app, err := core.Setup(cmd.Context(), g.dir, o, g.step)
 			if err != nil {
@@ -199,6 +202,7 @@ create the mounts yourself when asked.`,
 	f.StringVar(&o.Account.HTTPKey, "http-key", "", "EchoVRCE backend HTTP key (default: the public key)")
 	f.BoolVar(&passwordStdin, "password-stdin", false, "read the EchoVRCE password from stdin")
 	f.BoolVar(&noLink, "no-link", false, "with --device-link and no password: do not link this host at echovrce.com/device now")
+	f.BoolVar(&autoUpdates, "auto-updates", true, "keep evr-ptero, nevr-runtime and the servers' mods up to date automatically (false: only notify; default: keep the current setting)")
 	cmd.AddCommand(setup)
 	panelInstallCmds(g, cmd)
 	cmd.AddCommand(panelPasswordCmd(g), panelLoginCmd(g))

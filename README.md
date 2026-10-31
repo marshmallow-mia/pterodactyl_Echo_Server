@@ -104,10 +104,10 @@ version, and how many matches and restarts it has had.
 | `s` / `x` / `r` / `K` | start / stop / restart / kill |
 | `a` / `e` / `d` | add servers / edit one (regions, guilds, tick rate, empty TTL, runtime pin) / delete |
 | `i` | reinstall a server (runs the egg's install step again) |
-| `U` | updates of evr-ptero, the game files, nevr-runtime, the panel and Wings: install, pick a version, settings |
+| `U` | updates of evr-ptero, the game files, nevr-runtime, the servers' mods, the panel and Wings: install, pick a version, settings |
 | `M` | move servers from an old Echo egg: replace them or keep the panel servers, old logs, deleting the old files (only when the dashboard reports some) |
 | `c` | account: sign-in state and registered servers; `p` signs in with your Discord ID and server password, `o` takes the account from an old installation's game folder, `c` goes back to each server's console code |
-| `m` | more: updates, runtime versions, Discord alerts and the background service, moving servers from an old Echo egg, the panel connection, the panel admin login (show it, set or generate a new password), re-running the setup, the egg files, uninstalling the panel |
+| `m` | more: updates, runtime versions, server mods, Discord alerts and the background service, moving servers from an old Echo egg, the panel connection, the panel admin login (show it, set or generate a new password), re-running the setup, the egg files, uninstalling the panel |
 
 ![The m menu](docs/images/ptero-more.svg)
 
@@ -130,7 +130,10 @@ evr-ptero server logs NAME               follow the console
 evr-ptero server reinstall|rm NAME
 evr-ptero account code|set|test|servers  console code (default) or password sign-in; updates every server
 evr-ptero runtime ls|use TAG|rollback|remove TAG
-evr-ptero update [check|ls|apply|settings]   evr-ptero itself, game files, nevr-runtime, panel, Wings
+evr-ptero update [check|ls|apply|settings]   evr-ptero itself, game files, nevr-runtime, mods, panel, Wings
+evr-ptero mods ls|search|info ID         the servers' mods and the catalogues
+evr-ptero mods add ID[@VERSION] [--arg K=V] [--server NAME] / rm ID / pin ID [VERSION] / local on|off
+evr-ptero mods update [--check] / sync / dev-code ls|add|rm
 evr-ptero agent install|uninstall|run|webhook URL  metrics, Discord alerts, automatic runtime updates
 evr-ptero files install                  game and runtime into a directory
 evr-ptero egg export --format ptdl|plcn  the egg for importing by hand
@@ -157,9 +160,10 @@ the version), `c` checks again, `s` sets how each part is updated:
 
 | Part | What an update does | Default |
 |---|---|---|
-| `evr-ptero` | downloads the new release, checks it against `checksums.txt`, replaces the binary (the old one stays as `evr-ptero.prev`) and restarts; the egg and the servers move to the image released with it, each server at its next restart | notify |
+| `evr-ptero` | downloads the new release, checks it against `checksums.txt`, replaces the binary (the old one stays as `evr-ptero.prev`) and restarts; the egg and the servers move to the image released with it, each server at its next restart | auto |
 | game files | fetches missing or changed files of the node's shared copy from the mirror and verifies the build; servers use them from their next restart. Echo VR no longer changes, so this is a repair | notify |
 | nevr-runtime | installs the version of the runtime channel and tries it on one idle server first; only if that server registers do the others switch, at their next match boundary. A version that fails is skipped | auto |
+| mods | downloads the newest version of each server's mods (see [Mods](#mods)) and tries the new ones on one idle server first; only if it registers with every mod loaded do the others get them, at their next match boundary. A version that fails is marked bad and skipped | auto |
 | panel | backs up the panel files and database to `/var/backups/evr-ptero` (the last 3 are kept), maintenance mode, the new release, `composer install`, migrations, queue restart. If the panel API does not answer afterwards, the backup is restored | notify |
 | Wings | replaces the binary and restarts Wings; game servers keep running. If Wings does not come back, the old binary is put back | notify |
 
@@ -167,16 +171,46 @@ The panel and Wings appear when they run on this host. Each part is `off`, `noti
 and sent as a Discord alert) or `auto` (installed by the background service), optionally only inside a time window such
 as `04:00-06:00`. The panel follows its installed channel (Pterodactyl 1.x stable, or 2.x beta); you can pick any newer
 release by hand, and moving to another channel, e.g. 1.x to 2.x, asks you to type the version first, because that
-migration only goes forward. The same with commands:
+migration only goes forward. Setup asks once whether evr-ptero, nevr-runtime and the mods update themselves (yes by
+default; `--auto-updates=false` only notifies); a `config.yaml` that names a mode keeps it. The same with commands:
 
 ```
 evr-ptero update                                   check everything
 evr-ptero update ls self|game|runtime|panel|wings  versions to choose from
-evr-ptero update apply panel [--version V] [--dry-run]
-evr-ptero update settings --panel notify --wings auto --window 04:00-06:00 [--panel-channel beta]
+evr-ptero update apply panel|mods|… [--version V] [--dry-run]
+evr-ptero update settings --mods auto --panel notify --wings auto --window 04:00-06:00 [--panel-channel beta]
 ```
 
-Mods will be one more part here.
+## Mods
+
+The servers run mods from the same catalogues as the Echo VR launcher: `release.echovr.de`, every file checked against
+its signed index, with the community catalogue, pulled and blocked versions, and launcher dev codes. A mod marked for
+players' games only is left out; one marked for servers only never reaches players.
+
+```
+evr-ptero mods search                           what servers can run
+evr-ptero mods add server-patches --arg teamsize=6         for every server
+evr-ptero mods rm server-patches --server "Echo VR 2"      …except this one
+evr-ptero mods pin server-patches 0.4.1         keep a version (pin server-patches: follow the newest again)
+evr-ptero mods ls                               what each server runs, and whether nEVR loaded it
+```
+
+In the dashboard: `m` → Server mods. A change reaches each server at its next start, after its match. An edit keeps
+the other mods at the versions the servers run; new versions come as updates (above). A server's own list is kept in
+`config.yaml` under `server_mods` (by the server's UUID).
+
+How it works: evr-ptero downloads each mod into `/srv/echovr/mods` (checked like the launcher checks them) and copies
+the versions a server runs into its files (`mods/store`), next to its list, `mods.lock.json`. This needs Wings on the
+same host. At each start `evr-supervisor` copies them into the server's nEVR root, checks them again, and lists them in
+`config.yaml`; files it placed earlier that the list no longer has are taken away. A mod the server declares required
+that fails stops the server with `mod_failed`.
+
+- **Arguments** go over the catalogue's defaults. A value with `${…}` is refused.
+- **Own DLLs:** `evr-ptero mods local on --server NAME` also loads the DLLs in `mods/local` of the server's files (the
+  panel's file manager). They are not checked; use only DLLs you trust.
+- **Dev codes:** `evr-ptero mods dev-code add CODE` (kept in `secrets.env`). Gated codes, behind the EchoVRCE sign-in,
+  work only in the launcher.
+- A mod that comes with the game's files (such as NvrAssetPatches) runs on a server only when the list names it.
 
 ## Alerts and metrics
 

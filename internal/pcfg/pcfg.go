@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/instance"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/mods"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/config"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/updates"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/version"
@@ -45,6 +46,9 @@ const (
 	SecretAppKey    = "PANEL_APP_KEY"
 	SecretClientKey = "PANEL_CLIENT_KEY"
 	SecretWebhook   = "EVR_DISCORD_WEBHOOK"
+	// SecretModDevCodes are launcher dev codes (comma-separated) whose mods go
+	// over the published ones; like a password, they stay out of config.yaml.
+	SecretModDevCodes = "EVR_MOD_DEV_CODES"
 )
 
 // Mount names created in the panel.
@@ -71,6 +75,8 @@ type Config struct {
 	Metrics struct {
 		Listen string `yaml:"listen,omitempty"`
 	} `yaml:"metrics,omitempty"`
+	// ServerMods are servers' own mods over the defaults' (by panel UUID).
+	ServerMods map[string]OwnMods `yaml:"server_mods,omitempty"`
 	// HiddenLegacy lists old-egg servers (by UUID) the dashboard no longer points at.
 	HiddenLegacy []string `yaml:"hidden_legacy,omitempty"`
 
@@ -98,6 +104,13 @@ type Panel struct {
 	WingsData string `yaml:"wings_data,omitempty"`
 }
 
+// OwnMods are one server's mods over the defaults' (see instance.Settings).
+type OwnMods struct {
+	Name         string      `yaml:"name,omitempty"` // the panel name when last saved, for people reading the file
+	Mods         []mods.Spec `yaml:"mods,omitempty"`
+	LocalPlugins *bool       `yaml:"local_plugins,omitempty"`
+}
+
 // Resources for new servers (0 = unlimited).
 type Resources struct {
 	MemoryMB int `yaml:"memory_mb"`
@@ -121,6 +134,7 @@ type UpdatePolicy struct {
 	Self       string `yaml:"self"`                  // evr-ptero itself
 	Game       string `yaml:"game"`
 	Runtime    string `yaml:"runtime"`
+	Mods       string `yaml:"mods"`  // the servers' mods (new versions from the catalogues)
 	Panel      string `yaml:"panel"` // the panel on this host
 	Wings      string `yaml:"wings"` // Wings on this host
 	// PanelChannel: "" = the installed one; stable or beta (Pterodactyl).
@@ -131,11 +145,11 @@ type UpdatePolicy struct {
 func (u UpdatePolicy) Settings() updates.Settings {
 	return updates.Settings{CheckHours: u.CheckHours, Window: u.Window, Modes: map[string]updates.Mode{
 		"self": updates.Mode(u.Self), "game": updates.Mode(u.Game), "runtime": updates.Mode(u.Runtime),
-		"panel": updates.Mode(u.Panel), "wings": updates.Mode(u.Wings)}}
+		"mods": updates.Mode(u.Mods), "panel": updates.Mode(u.Panel), "wings": updates.Mode(u.Wings)}}
 }
 
 func (u *UpdatePolicy) modes() map[string]*string {
-	return map[string]*string{"self": &u.Self, "game": &u.Game, "runtime": &u.Runtime, "panel": &u.Panel, "wings": &u.Wings}
+	return map[string]*string{"self": &u.Self, "game": &u.Game, "runtime": &u.Runtime, "mods": &u.Mods, "panel": &u.Panel, "wings": &u.Wings}
 }
 
 // migrate moves settings from older config versions and fills defaults.
@@ -170,7 +184,9 @@ func New() *Config {
 		Defaults:  instance.Settings{TickRate: config.DefaultTickRate, PublisherLock: "echovrce", Runtime: "current"},
 		Resources: Resources{MemoryMB: 0, DiskMB: 2048},
 		Runtime:   RuntimePolicy{Channel: "pre"},
-		Updates:   UpdatePolicy{CheckHours: 6, Self: "notify", Game: "notify", Runtime: "auto", Panel: "notify", Wings: "notify"},
+		// evr-ptero, nEVR and the mods update themselves unless setup or
+		// `update settings` turn it off; a config that names a mode keeps it.
+		Updates: UpdatePolicy{CheckHours: 6, Self: "auto", Game: "notify", Runtime: "auto", Mods: "auto", Panel: "notify", Wings: "notify"},
 	}
 	c.Panel.Nest = DefaultNest
 	c.Panel.WingsData = "/var/lib/pterodactyl/volumes"
@@ -249,6 +265,11 @@ func (c *Config) Validate() error {
 	if err := c.Defaults.Validate(); err != nil {
 		errs = append(errs, fmt.Errorf("defaults: %w", err))
 	}
+	for uuid, own := range c.ServerMods {
+		if err := (instance.Settings{Mods: own.Mods}).Validate(); err != nil {
+			errs = append(errs, fmt.Errorf("server_mods %s: %w", orName(own.Name, uuid), err))
+		}
+	}
 	return errors.Join(errs...)
 }
 
@@ -275,6 +296,9 @@ func (c *Config) Save(dir string) error {
 // GameDir and NevrDir are the shared directories on the node.
 func (c *Config) GameDir() string { return filepath.Join(c.DataDir, "game") }
 func (c *Config) NevrDir() string { return filepath.Join(c.DataDir, "nevr") }
+
+// ModsDir holds the downloaded mods; each server gets a copy of its own.
+func (c *Config) ModsDir() string { return filepath.Join(c.DataDir, "mods") }
 
 // Secrets from secrets.env.
 type Secrets map[string]string
@@ -353,4 +377,41 @@ func writeAtomic(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
+}
+
+func orName(name, uuid string) string {
+	if name != "" {
+		return name
+	}
+	return uuid
+}
+
+// DevCodes are the mod dev codes in secrets.env.
+func (s Secrets) DevCodes() []string {
+	var out []string
+	for _, c := range strings.Split(s[SecretModDevCodes], ",") {
+		if c = strings.TrimSpace(c); c != "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// SetDevCodes stores the mod dev codes (none removes the line).
+func (s Secrets) SetDevCodes(codes []string) {
+	if len(codes) == 0 {
+		delete(s, SecretModDevCodes)
+		return
+	}
+	s[SecretModDevCodes] = strings.Join(codes, ",")
+}
+
+// SetAutoUpdates turns automatic updates of evr-ptero, nevr-runtime and the
+// servers' mods on (auto) or off (notify). The other parts keep their setting.
+func (c *Config) SetAutoUpdates(on bool) {
+	mode := "notify"
+	if on {
+		mode = "auto"
+	}
+	c.Updates.Self, c.Updates.Runtime, c.Updates.Mods = mode, mode, mode
 }

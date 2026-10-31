@@ -308,6 +308,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.migrateForm(legacyMsg{list: msg})
 		}
 		return m, nil
+	case modCatalogMsg:
+		return m, m.addModForm(msg)
 	case versionsMsg:
 		return m, m.applyForm(msg)
 	case updatesMsg:

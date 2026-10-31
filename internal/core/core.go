@@ -732,7 +732,14 @@ func (a *App) prepare(ctx context.Context, s panel.Server) error {
 
 // Delete removes a server from the panel.
 func (a *App) Delete(ctx context.Context, s Server) error {
-	return a.Panel().DeleteServer(ctx, s.Panel.ID, false)
+	if err := a.Panel().DeleteServer(ctx, s.Panel.ID, false); err != nil {
+		return err
+	}
+	if _, ok := a.Cfg.ServerMods[s.Panel.UUID]; ok {
+		delete(a.Cfg.ServerMods, s.Panel.UUID)
+		return a.Save()
+	}
+	return nil
 }
 
 // Console streams a server's console.
