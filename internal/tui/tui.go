@@ -17,6 +17,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/instance"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/match"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/auth"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/status"
@@ -433,6 +434,11 @@ func (m *Model) refresh() {
 			if s.State() == string(status.StateAwaitingApproval) {
 				note = "approve: " + st.SignInURL
 			}
+			if note == "" && st.State == status.StateInSession {
+				if mt, ok := m.App.Match(s); ok && mt.Active {
+					note = match.Line(mt)
+				}
+			}
 		}
 		rows = append(rows, table.Row{s.Name(), s.Panel.Identifier, strconv.Itoa(s.Port), ui.StateLabel(s.State()), rt, reg, matches, note})
 	}
@@ -483,6 +489,14 @@ func (m *Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, run()
 		}
 		m.ask(fmt.Sprintf("%s %s? Players in a match are disconnected.", strings.ToUpper(sig[:1])+sig[1:], sel.Name()), run)
+	case "t":
+		if has {
+			on := !app.SessionAPI(sel)
+			word := map[bool]string{true: "on", false: "off"}[on]
+			return m, m.quick(sel.Name()+": match stats "+word+" (an idle game restarts now, one in a match after it)", func(ctx context.Context) error {
+				return app.SetSessionAPI(ctx, sel, on)
+			})
+		}
 	case "a":
 		if !app.HasAccount() {
 			m.flash, m.flashBad = signInFirst(), true
@@ -740,6 +754,7 @@ func (m *Model) render() string {
 	if m.loadErr != nil {
 		body += "\n" + ui.Error.Render(m.loadErr.Error())
 	}
+	body += m.matchDetail()
 	body += m.approvalDetail()
 	body += m.updatesNotice()
 	if n := len(m.legacy); n > 0 && len(m.servers) > 0 {
@@ -749,8 +764,32 @@ func (m *Model) render() string {
 		body += "\n" + ui.Warning.Render("The servers have no EchoVRCE sign-in yet: press ") + ui.KeyStyle.Render("c") + ui.Warning.Render(" to sign in.")
 	}
 	return m.header() + "\n\n" + body + "\n" + m.footer(
-		ui.K("enter", "console"), ui.K("s", "start"), ui.K("x", "stop"), ui.K("r", "restart"), ui.K("K", "kill"),
+		ui.K("enter", "console"), ui.K("s", "start"), ui.K("x", "stop"), ui.K("r", "restart"), ui.K("K", "kill"), ui.K("t", "stats API"),
 		ui.K("a", "add"), ui.K("e", "edit"), ui.K("i", "reinstall"), ui.K("d", "delete"), ui.K("c", "account"), ui.K("U", "updates"), ui.K("m", "more"), ui.K("q", "quit"))
+}
+
+// matchDetail describes the selected server's match and its stats switch.
+func (m *Model) matchDetail() string {
+	s, ok := m.selected()
+	if !ok || m.App == nil {
+		return ""
+	}
+	api := "on"
+	if !m.App.SessionAPI(s) {
+		api = "off"
+	}
+	if st := s.Status; st != nil && s.Power == "running" && st.SessionAPI != "" && st.SessionAPI != api {
+		api += " (game: " + st.SessionAPI + " until its next start)"
+	}
+	line := "stats API " + api
+	if mt, ok := m.App.Match(s); ok {
+		if mt.Active {
+			line = "match: " + match.Line(mt) + " · " + line
+		} else if !mt.EndedAt.IsZero() {
+			line = "last match " + mt.EndedAt.Local().Format("15:04") + ": " + match.Line(mt) + " · " + line
+		}
+	}
+	return "\n" + ui.Subtle.Render(ui.Truncate(s.Name()+" "+line, m.width-2))
 }
 
 // approvalDetail names the servers that wait for their sign-in code.

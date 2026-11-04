@@ -232,6 +232,7 @@ func Setup(ctx context.Context, dir string, o SetupOptions, say func(step, detai
 	if err := a.syncServerImages(ctx, say); err != nil {
 		return a, err
 	}
+	a.syncPlugin(ctx, say)
 
 	// Mounts.
 	if cfg.GameSource == "mount" {
