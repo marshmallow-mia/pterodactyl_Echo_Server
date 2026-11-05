@@ -9,13 +9,14 @@ require (
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/coder/websocket v1.8.15
-	github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.1.1
+	github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2 v2.2.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/term v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
+	buf.build/gen/go/echotools/nevr-api/protocolbuffers/go v1.36.12-20261027024255-259a506a3e1b.2 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/catppuccin/go v0.2.0 // indirect

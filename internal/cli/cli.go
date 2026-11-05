@@ -351,7 +351,7 @@ func serverCmd(g *globals) *cobra.Command {
 	create.Flags().StringVar(&regions, "regions", "", "comma-separated regions")
 	create.Flags().StringVar(&guilds, "guilds", "", "comma-separated guild IDs")
 	cmd.AddCommand(create)
-	cmd.AddCommand(serverAPICmd(g), serverMatchCmd(g))
+	cmd.AddCommand(serverAPICmd(g), serverTelemetryCmd(g), serverMatchCmd(g))
 	for _, sig := range []string{"start", "stop", "restart", "kill"} {
 		sig := sig
 		cmd.AddCommand(&cobra.Command{

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -9,19 +10,55 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/match"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/status"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/core"
 )
 
+// switchSpec describes an on/off switch of a server's match stats.
+type switchSpec struct {
+	name, short, long, label string
+	get                      func(a *core.App, s core.Server) bool
+	running                  func(st *status.Status) string
+	set                      func(a *core.App, ctx context.Context, s core.Server, on bool) error
+}
+
 func serverAPICmd(g *globals) *cobra.Command {
-	var all bool
-	c := &cobra.Command{
-		Use:   "api on|off|status [SERVER...]",
-		Short: "Switch match stats (the game's session API) on or off",
-		Long: "Match stats come from the game's HTTP API on 127.0.0.1 inside each container (never reachable from outside);\n" +
+	return switchCmd(g, switchSpec{
+		name:  "api",
+		short: "Switch match stats (the game's session API) on or off",
+		long: "Match stats come from the game's HTTP API on 127.0.0.1 inside each container (never reachable from outside);\n" +
 			"the supervisor writes them to match.json and match-history.json in the server's volume, where the panel's\n" +
 			"Echo VR match plugin and the dashboard read them. On by default. An idle server restarts its game to apply\n" +
 			"a change; one in a match applies it after the match. Panel users with console access can switch it too.",
-		Args: cobra.MinimumNArgs(1),
+		label:   "match stats",
+		get:     (*core.App).SessionAPI,
+		running: func(st *status.Status) string { return st.SessionAPI },
+		set:     (*core.App).SetSessionAPI,
+	})
+}
+
+func serverTelemetryCmd(g *globals) *cobra.Command {
+	return switchCmd(g, switchSpec{
+		name:  "telemetry",
+		short: "Switch nevr-runtime's telemetry stream to the supervisor on or off",
+		long: "With telemetry on, nevr-runtime streams the match to the supervisor on 127.0.0.1 inside the container\n" +
+			"(never to anyone else). The supervisor reports the connection; the play-by-play comes from the session API,\n" +
+			"because nevr-runtime 6.16.4 sends most player stat events wrong (EVR_TELEMETRY_PLAYS=1 uses them anyway).\n" +
+			"On by default. An idle server restarts its game to apply a change; one in a match applies it after the match.",
+		label:   "telemetry",
+		get:     (*core.App).Telemetry,
+		running: func(st *status.Status) string { return st.Telemetry },
+		set:     (*core.App).SetTelemetry,
+	})
+}
+
+func switchCmd(g *globals, sp switchSpec) *cobra.Command {
+	var all bool
+	c := &cobra.Command{
+		Use:   sp.name + " on|off|status [SERVER...]",
+		Short: sp.short,
+		Long:  sp.long,
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := g.app()
 			if err != nil {
@@ -41,9 +78,9 @@ func serverAPICmd(g *globals) *cobra.Command {
 				}
 				var rows []row
 				for _, s := range servers {
-					r := row{Name: s.Name(), Setting: onOff(a.SessionAPI(s))}
+					r := row{Name: s.Name(), Setting: onOff(sp.get(a, s))}
 					if s.Status != nil && s.Power == "running" {
-						r.Running = s.Status.SessionAPI
+						r.Running = sp.running(s.Status)
 					}
 					rows = append(rows, r)
 				}
@@ -61,11 +98,11 @@ func serverAPICmd(g *globals) *cobra.Command {
 			}
 			var errs []error
 			for _, s := range servers {
-				if err := a.SetSessionAPI(cmd.Context(), s, action == "on"); err != nil {
+				if err := sp.set(a, cmd.Context(), s, action == "on"); err != nil {
 					errs = append(errs, fmt.Errorf("%s: %w", s.Name(), err))
 					continue
 				}
-				g.say("%s: match stats %s (an idle server restarts its game now, one in a match after it)", s.Name(), action)
+				g.say("%s: %s %s (an idle server restarts its game now, one in a match after it)", s.Name(), sp.label, action)
 			}
 			return errors.Join(errs...)
 		},

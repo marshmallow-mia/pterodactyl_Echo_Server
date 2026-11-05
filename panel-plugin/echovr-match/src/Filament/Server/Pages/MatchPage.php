@@ -66,6 +66,23 @@ class MatchPage extends Page
                         Notification::make()->danger()->title(trans('echovr-match::match.api.failed'))->body($e->getMessage())->send();
                     }
                 }),
+            Action::make('telemetry')
+                ->label(fn () => trans(MatchReader::telemetrySetting($this->server()) ? 'echovr-match::match.telemetry.turn_off' : 'echovr-match::match.telemetry.turn_on'))
+                ->icon('tabler-activity')
+                ->color('gray')
+                ->authorize(fn () => user()?->can(SubuserPermission::ControlConsole, $this->server()))
+                ->requiresConfirmation()
+                ->modalDescription(trans('echovr-match::match.telemetry.confirm'))
+                ->action(function () {
+                    $on = !MatchReader::telemetrySetting($this->server());
+                    try {
+                        $key = MatchReader::setTelemetry($this->server(), $on);
+                        Notification::make()->success()->title(trans($on ? 'echovr-match::match.telemetry.turned_on' : 'echovr-match::match.telemetry.turned_off'))->body(trans($key))->send();
+                    } catch (Throwable $e) {
+                        report($e);
+                        Notification::make()->danger()->title(trans('echovr-match::match.telemetry.failed'))->body($e->getMessage())->send();
+                    }
+                }),
         ];
     }
 
@@ -79,6 +96,10 @@ class MatchPage extends Page
             'history' => MatchReader::history($server),
             'apiOn' => MatchReader::apiSetting($server),
             'poll' => config('echovr-match.poll.page', '3s'),
+            'live' => [
+                'url' => \Illuminate\Support\Facades\Route::has('echovr-match.live') ? route('echovr-match.live', ['server' => $server->uuid]) : null,
+                'ms' => (int) config('echovr-match.live_ms', 200),
+            ],
         ];
     }
 }

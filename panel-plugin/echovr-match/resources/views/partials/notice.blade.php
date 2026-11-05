@@ -9,7 +9,7 @@
         $text = trans('echovr-match::match.api.unreachable');
     } elseif (!$apiOn) {
         $text = trans('echovr-match::match.api.is_off');
-    } elseif ($m && ($m['active'] ?? false)) {
+    } elseif ($m && ($m['active'] ?? false) && !\MarshmallowMia\EchoVrMatch\Services\Format::isLobby($m)) {
         $text = match ($m['api'] ?? '') {
             'disabled' => trans('echovr-match::match.api.disabled'),
             'unavailable' => trans('echovr-match::match.api.unavailable', ['error' => $m['api_error'] ?? '']),

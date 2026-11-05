@@ -497,6 +497,14 @@ func (m *Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return app.SetSessionAPI(ctx, sel, on)
 			})
 		}
+	case "T":
+		if has {
+			on := !app.Telemetry(sel)
+			word := map[bool]string{true: "on", false: "off"}[on]
+			return m, m.quick(sel.Name()+": telemetry "+word+" (an idle game restarts now, one in a match after it)", func(ctx context.Context) error {
+				return app.SetTelemetry(ctx, sel, on)
+			})
+		}
 	case "a":
 		if !app.HasAccount() {
 			m.flash, m.flashBad = signInFirst(), true
@@ -764,7 +772,7 @@ func (m *Model) render() string {
 		body += "\n" + ui.Warning.Render("The servers have no EchoVRCE sign-in yet: press ") + ui.KeyStyle.Render("c") + ui.Warning.Render(" to sign in.")
 	}
 	return m.header() + "\n\n" + body + "\n" + m.footer(
-		ui.K("enter", "console"), ui.K("s", "start"), ui.K("x", "stop"), ui.K("r", "restart"), ui.K("K", "kill"), ui.K("t", "stats API"),
+		ui.K("enter", "console"), ui.K("s", "start"), ui.K("x", "stop"), ui.K("r", "restart"), ui.K("K", "kill"), ui.K("t", "stats API"), ui.K("T", "telemetry"),
 		ui.K("a", "add"), ui.K("e", "edit"), ui.K("i", "reinstall"), ui.K("d", "delete"), ui.K("c", "account"), ui.K("U", "updates"), ui.K("m", "more"), ui.K("q", "quit"))
 }
 
@@ -782,6 +790,14 @@ func (m *Model) matchDetail() string {
 		api += " (game: " + st.SessionAPI + " until its next start)"
 	}
 	line := "stats API " + api
+	tele := "off"
+	if m.App.Telemetry(s) {
+		tele = "on"
+	}
+	if st := s.Status; st != nil && s.Power == "running" && st.Telemetry != "" && st.Telemetry != tele {
+		tele += " (game: " + st.Telemetry + " until its next start)"
+	}
+	line += " · telemetry " + tele
 	if mt, ok := m.App.Match(s); ok {
 		if mt.Active {
 			line = "match: " + match.Line(mt) + " · " + line

@@ -2,11 +2,13 @@
     use MarshmallowMia\EchoVrMatch\Services\Format;
     $m = $match['data'] ?? null;
     $active = $m && ($m['active'] ?? false);
+    $lobby = Format::isLobby($m);
     [$stateLabel, $stateColor] = Format::state($status['state'] ?? null);
     $cell = 'padding:.35rem .5rem;white-space:nowrap';
     $head = $cell . ';font-size:.75rem;font-weight:600;opacity:.7;text-align:left';
 @endphp
 <x-filament-panels::page>
+    @include('echovr-match::partials.live-map-script')
     <div wire:poll.{{ $poll }} style="display:flex;flex-direction:column;gap:1.5rem">
         <x-filament::section>
             <div style="display:flex;flex-wrap:wrap;gap:1rem 2rem;align-items:center;justify-content:space-between">
@@ -32,8 +34,10 @@
                         </div>
                     @endif
                 </div>
-                @if ($m)
+                @if ($m && !$lobby)
                     @include('echovr-match::partials.score', ['m' => $m, 'size' => '2.5rem'])
+                @elseif ($m && $active)
+                    <div style="font-size:1.125rem;font-weight:600">{{ trans('echovr-match::match.players', ['count' => $m['players'] ?? 0]) }}</div>
                 @endif
             </div>
             @include('echovr-match::partials.notice')
@@ -46,7 +50,11 @@
             </div>
         @endif
 
-        @if ($m && (!empty($m['last_goal']) || !empty($m['spectators']) || !empty($m['payload'])))
+        @if ($m && $active)
+            @include('echovr-match::partials.map', ['m' => $m, 'live' => $live ?? null])
+        @endif
+
+        @if ($m && (!empty($m['last_goal']) || !empty($m['spectators']) || !empty($m['payload']) || !in_array($m['rules_changed_by'] ?? '', ['', '[INVALID]'], true)))
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));gap:1.5rem">
                 @if (!empty($m['last_goal']))
                     @php $g = $m['last_goal']; @endphp
@@ -55,10 +63,18 @@
                             {{ $g['scorer'] ?: trans('echovr-match::match.' . ($g['team'] ?? 'blue')) }} · {{ $g['points'] ?? 0 }}
                         </div>
                         <div style="font-size:.875rem;opacity:.8">
-                            @if (!empty($g['type'])) {{ $g['type'] }} · @endif
-                            {{ number_format($g['speed'] ?? 0, 1) }} m/s · {{ number_format($g['distance'] ?? 0, 1) }} m
-                            @if (!empty($g['assist'])) · assist {{ $g['assist'] }} @endif
+                            {{ collect([
+                                $g['type'] ?? '',
+                                ($g['speed'] ?? 0) > 0 ? number_format($g['speed'], 1) . ' m/s' : '',
+                                ($g['distance'] ?? 0) > 0 ? number_format($g['distance'], 1) . ' m' : '',
+                                !empty($g['assist']) ? 'assist ' . $g['assist'] : '',
+                            ])->filter()->join(' · ') }}
                         </div>
+                    </x-filament::section>
+                @endif
+                @if (!in_array($m['rules_changed_by'] ?? '', ['', '[INVALID]'], true))
+                    <x-filament::section :heading="trans('echovr-match::match.rules')">
+                        <div style="font-size:.875rem">{{ trans('echovr-match::match.rules_changed_by', ['name' => $m['rules_changed_by']]) }}</div>
                     </x-filament::section>
                 @endif
                 @if (!empty($m['payload']))
@@ -71,7 +87,7 @@
                     </x-filament::section>
                 @endif
                 @if (!empty($m['spectators']))
-                    <x-filament::section :heading="trans('echovr-match::match.spectators')">
+                    <x-filament::section :heading="trans($lobby ? 'echovr-match::match.in_lobby' : 'echovr-match::match.spectators')">
                         <div style="font-size:.875rem">{{ collect($m['spectators'])->pluck('name')->join(', ') }}</div>
                     </x-filament::section>
                 @endif
@@ -85,12 +101,28 @@
                         <li style="display:flex;gap:.75rem" wire:key="ev-{{ $loop->index }}-{{ $e['at'] }}">
                             <span style="opacity:.6;font-variant-numeric:tabular-nums;min-width:4.5rem">{{ Format::time($e['at'] ?? null) }}</span>
                             <span style="opacity:.6;font-variant-numeric:tabular-nums;min-width:5rem">{{ $e['clock'] ?? '' }}</span>
+                            <span style="color:{{ Format::teamColor($e['team'] ?? null) }};{{ ($e['type'] ?? '') === 'phase' ? 'opacity:.75;font-style:italic' : '' }}">{{ $e['text'] }}</span>
+                        </li>
+                    @endforeach
+                </ul>
+            </x-filament::section>
+        @endif
+
+        @if (!empty($m['plays']))
+            <x-filament::section :heading="trans('echovr-match::match.plays')" :description="trans('echovr-match::match.plays_note')" collapsible>
+                <ul style="display:flex;flex-direction:column;gap:.25rem;font-size:.875rem;max-height:18rem;overflow-y:auto">
+                    @foreach ($m['plays'] as $e)
+                        <li style="display:flex;gap:.75rem" wire:key="play-{{ $loop->index }}-{{ $e['at'] }}">
+                            <span style="opacity:.6;font-variant-numeric:tabular-nums;min-width:4.5rem">{{ Format::time($e['at'] ?? null) }}</span>
+                            <span style="opacity:.6;font-variant-numeric:tabular-nums;min-width:5rem">{{ $e['clock'] ?? '' }}</span>
                             <span style="color:{{ Format::teamColor($e['team'] ?? null) }}">{{ $e['text'] }}</span>
                         </li>
                     @endforeach
                 </ul>
             </x-filament::section>
         @endif
+
+        @include('echovr-match::partials.health', ['status' => $status])
 
         <x-filament::section :heading="trans('echovr-match::match.history')" collapsible>
             @if (count($history) === 0)
@@ -116,8 +148,12 @@
                                     <td style="{{ $cell }}">{{ Format::duration((int) ($h['duration_s'] ?? 0)) }}</td>
                                     <td style="{{ $cell }}">
                                         @if (($h['source'] ?? '') === 'session_api')
+                                            @php $hr = $h['rounds'] ?? null; @endphp
                                             <span style="color:{{ Format::BLUE }}">{{ Format::points($h['blue_points'] ?? 0, $h['percent'] ?? false) }}</span> :
                                             <span style="color:{{ Format::ORANGE }}">{{ Format::points($h['orange_points'] ?? 0, $h['percent'] ?? false) }}</span>
+                                            @if ($hr && (($h['percent'] ?? false) || ($hr['total'] ?? 0) > 1) && (($hr['blue'] ?? 0) + ($hr['orange'] ?? 0)) > 0)
+                                                <span style="opacity:.7">· {{ trans('echovr-match::match.round_wins') }} {{ $hr['blue'] }}–{{ $hr['orange'] }}</span>
+                                            @endif
                                         @else
                                             —
                                         @endif

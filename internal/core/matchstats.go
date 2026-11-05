@@ -20,15 +20,28 @@ func (a *App) SessionAPI(s Server) bool { return match.LoadSettings(a.volume(s))
 // applies it (idle: restarts the game; in a match: after it); a stopped one
 // gets the setting written into its volume for its next start.
 func (a *App) SetSessionAPI(ctx context.Context, s Server, on bool) error {
+	return a.setSwitch(ctx, s, "api", on, match.SetAPI)
+}
+
+// Telemetry reports whether a server's telemetry stream (nevr-runtime's
+// play-by-play to the supervisor) is switched on; on by default.
+func (a *App) Telemetry(s Server) bool { return match.LoadSettings(a.volume(s)).TelemetryOn() }
+
+// SetTelemetry switches a server's telemetry stream like SetSessionAPI.
+func (a *App) SetTelemetry(ctx context.Context, s Server, on bool) error {
+	return a.setSwitch(ctx, s, "telemetry", on, match.SetTelemetry)
+}
+
+func (a *App) setSwitch(ctx context.Context, s Server, command string, on bool, save func(string, bool) error) error {
 	if s.Power == "running" || s.Power == "starting" {
-		cmd := "api off"
+		word := "off"
 		if on {
-			cmd = "api on"
+			word = "on"
 		}
-		return a.Panel().Command(ctx, s.Panel.Identifier, cmd)
+		return a.Panel().Command(ctx, s.Panel.Identifier, command+" "+word)
 	}
 	vol := a.volume(s)
-	if err := match.SetAPI(vol, on); err != nil {
+	if err := save(vol, on); err != nil {
 		return err
 	}
 	// The volume belongs to Wings' container user; keep the file theirs.

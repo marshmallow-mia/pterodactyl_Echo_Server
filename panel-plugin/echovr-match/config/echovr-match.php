@@ -9,6 +9,12 @@ return [
     // Seconds the panel keeps a server's match files before asking Wings again.
     'cache_seconds' => 2,
 
+    // The Match page's live map: milliseconds between the browser's reads of
+    // the server's live.json (0 = the map moves with the page's refresh), and
+    // how long one read from Wings serves every viewer.
+    'live_ms' => 200,
+    'live_cache_ms' => 150,
+
     // How often the views refresh.
     'poll' => [
         'widget' => '3s',

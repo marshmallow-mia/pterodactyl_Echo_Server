@@ -21,6 +21,7 @@
                                 <th style="{{ $head }}">{{ trans('echovr-match::match.clock') }}</th>
                                 <th style="{{ $head }}">{{ trans('echovr-match::match.cols.player') }}</th>
                                 <th style="{{ $head }}">{{ trans('echovr-match::match.api.label') }}</th>
+                                <th style="{{ $head }}">{{ trans('echovr-match::match.health.serverdb') }}</th>
                                 <th style="{{ $head }}"></th>
                             </tr>
                         </thead>
@@ -51,16 +52,30 @@
                                         @else — @endif
                                     </td>
                                     <td style="{{ $cell }}">
-                                        @if ($m && isset($m['blue'], $m['orange']))
+                                        @if ($m && isset($m['blue'], $m['orange']) && !Format::isLobby($m))
                                             <span style="font-weight:600;color:{{ Format::BLUE }}">{{ Format::points($m['blue']['points'] ?? 0, $m['percent'] ?? false) }}</span> :
                                             <span style="font-weight:600;color:{{ Format::ORANGE }}">{{ Format::points($m['orange']['points'] ?? 0, $m['percent'] ?? false) }}</span>
                                         @else — @endif
                                     </td>
                                     <td style="{{ $cell }}">
-                                        @if ($active) {{ $m['clock_display'] ?? '' }} <span style="opacity:.6">{{ Format::status($m['status'] ?? null) }}</span> @endif
+                                        @if ($active)
+                                            @if (!empty($m['round']) && empty($m['clock_display'])) {{ trans('echovr-match::match.round_n', ['n' => $m['round']]) }} @endif
+                                            {{ Format::clock($m) }} <span style="opacity:.6">{{ Format::phase($m) }}</span>
+                                        @endif
                                     </td>
-                                    <td style="{{ $cell }}">{{ $active && ($m['api'] ?? '') === 'on' ? ($m['players'] ?? 0) : '' }}</td>
+                                    <td style="{{ $cell }}">{{ $active && ($m['players'] ?? 0) > 0 ? $m['players'] : '' }}</td>
                                     <td style="{{ $cell }}">{{ $api ?? '—' }}</td>
+                                    <td style="{{ $cell }}">
+                                        @php $db = $r['status']['serverdb'] ?? ''; @endphp
+                                        @if ($db === 'connected')
+                                            <x-filament::badge color="success">{{ trans('echovr-match::match.health.connected') }}</x-filament::badge>
+                                        @elseif ($db === 'disconnected')
+                                            <x-filament::badge color="danger">{{ trans('echovr-match::match.health.disconnected') }}</x-filament::badge>
+                                        @else — @endif
+                                        @if (!empty($r['status']['crash_recoveries']))
+                                            <div style="color:#ef4444;font-size:.75rem">{{ trans('echovr-match::match.health.crashes', ['n' => $r['status']['crash_recoveries']]) }}</div>
+                                        @endif
+                                    </td>
                                     <td style="{{ $cell }}">
                                         @if ($r['url'])
                                             <x-filament::link :href="$r['url']" icon="tabler-trophy">{{ trans('echovr-match::match.open') }}</x-filament::link>

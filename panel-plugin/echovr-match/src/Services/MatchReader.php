@@ -58,6 +58,36 @@ class MatchReader
         });
     }
 
+    /**
+     * The server's live.json (the map's positions, rewritten several times a
+     * second). Every viewer shares one read per live_cache_ms; Laravel's cache
+     * keeps nothing under a second, so the entry carries its own read time.
+     *
+     * @return ?array<string, mixed> null when there is none (no match, or live positions off)
+     */
+    public static function live(Server $server): ?array
+    {
+        $key = "echovr-match.$server->uuid.live";
+        $maxAge = max(0, (int) config('echovr-match.live_cache_ms', 150)) / 1000;
+        $hit = Cache::get($key);
+        if (is_array($hit) && microtime(true) - ($hit['read_at'] ?? 0) < $maxAge) {
+            return $hit['data'];
+        }
+        try {
+            $body = (string) app(DaemonFileRepository::class)->setServer($server)->getContent('live.json', 256 * 1024);
+            $data = json_decode($body, true);
+            $data = is_array($data) ? $data : null;
+        } catch (FileNotFoundException) {
+            $data = null;
+        } catch (Throwable $e) {
+            report($e);
+            $data = null;
+        }
+        Cache::put($key, ['read_at' => microtime(true), 'data' => $data], 2);
+
+        return $data;
+    }
+
     /** @return array{data: ?array<string, mixed>, error: ?string} */
     public static function match(Server $server): array
     {
@@ -114,14 +144,33 @@ class MatchReader
      */
     public static function setApi(Server $server, bool $on): string
     {
+        return self::setSwitch($server, 'api', 'session_api', $on);
+    }
+
+    /** Whether the server streams nEVR's telemetry (the play-by-play) to its supervisor; on unless switched off. */
+    public static function telemetrySetting(Server $server): bool
+    {
+        $s = self::file($server, 'evr-settings.json');
+
+        return ($s['data']['telemetry'] ?? true) !== false;
+    }
+
+    /** Switches the telemetry stream like setApi. */
+    public static function setTelemetry(Server $server, bool $on): string
+    {
+        return self::setSwitch($server, 'telemetry', 'telemetry', $on);
+    }
+
+    private static function setSwitch(Server $server, string $command, string $key, bool $on): string
+    {
         $state = $server->retrieveStatus();
         if (in_array($state, [ContainerStatus::Running, ContainerStatus::Starting], true)) {
-            $server->send('api ' . ($on ? 'on' : 'off'));
+            $server->send($command . ' ' . ($on ? 'on' : 'off'));
             $result = 'echovr-match::match.api.sent';
         } else {
             $repo = app(DaemonFileRepository::class)->setServer($server);
             $settings = self::file($server, 'evr-settings.json', true)['data'] ?? [];
-            $settings['session_api'] = $on;
+            $settings[$key] = $on;
             $repo->putContent('evr-settings.json', json_encode($settings, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n");
             $result = 'echovr-match::match.api.saved';
         }

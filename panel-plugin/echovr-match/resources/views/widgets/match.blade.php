@@ -30,12 +30,12 @@
                 </div>
             </div>
 
-            @if ($m)
+            @if ($m && !Format::isLobby($m))
                 @include('echovr-match::partials.score', ['m' => $m, 'size' => '1.75rem'])
             @endif
 
             <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
-                @if ($m && ($m['api'] ?? '') === 'on')
+                @if ($active && ($m['players'] ?? 0) > 0)
                     <span style="font-size:.875rem;opacity:.8">{{ trans('echovr-match::match.players', ['count' => $m['players'] ?? 0]) }}</span>
                 @endif
                 <x-filament::button tag="a" :href="$pageUrl" color="gray" size="sm" icon="tabler-trophy">

@@ -44,11 +44,16 @@
                             <td style="{{ $cell }};text-align:left;font-weight:500">
                                 {{ $p['name'] }}
                                 @if (!empty($p['possession'])) <x-filament::icon icon="tabler-disc" style="display:inline-block;width:.9rem;height:.9rem;vertical-align:middle" /> @endif
-                                @if (!empty($p['stunned'])) <x-filament::icon icon="tabler-bolt" style="display:inline-block;width:.9rem;height:.9rem;vertical-align:middle" /> @endif
+                                @if (!empty($p['stunned'])) <span title="{{ trans('echovr-match::match.flags.stunned') }}"><x-filament::icon icon="tabler-bolt" style="display:inline-block;width:.9rem;height:.9rem;vertical-align:middle" /></span> @endif
+                                @if (!empty($p['blocking'])) <span title="{{ trans('echovr-match::match.flags.blocking') }}"><x-filament::icon icon="tabler-shield" style="display:inline-block;width:.9rem;height:.9rem;vertical-align:middle" /></span> @endif
+                                @if (!empty($p['emote'])) <span title="{{ trans('echovr-match::match.flags.emote') }}"><x-filament::icon icon="tabler-mood-smile" style="display:inline-block;width:.9rem;height:.9rem;vertical-align:middle" /></span> @endif
                             </td>
                             <td style="{{ $cell }}">{{ $p['level'] ?? '' }}</td>
-                            <td style="{{ $cell }}">{{ $p['ping'] ?? '' }}</td>
-                            <td style="{{ $cell }}">{{ isset($p['packet_loss']) ? number_format($p['packet_loss'] * 100, 1) . '%' : '' }}</td>
+                            @php $pc = Format::pingColor($p['ping'] ?? null, $p['packet_loss'] ?? 0); @endphp
+                            <td style="{{ $cell }};color:{{ $pc }}" title="{{ implode(' ', $p['ping_trend'] ?? []) }}">
+                                <span style="display:inline-flex;align-items:center;gap:.35rem">{!! Format::sparkline($p['ping_trend'] ?? [], $pc) !!}<span>{{ $p['ping'] ?? '' }}</span></span>
+                            </td>
+                            <td style="{{ $cell }};color:{{ ($p['packet_loss'] ?? 0) >= 0.01 ? $pc : 'inherit' }}">{{ isset($p['packet_loss']) ? number_format($p['packet_loss'] * 100, 1) . '%' : '' }}</td>
                             @foreach ($stats as $s)
                                 <td style="{{ $cell }}">{{ $p['stats'][$s] ?? 0 }}</td>
                             @endforeach
