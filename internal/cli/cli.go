@@ -201,7 +201,7 @@ create the mounts yourself when asked.`,
 	f.BoolVar(&noLink, "no-link", false, "with --device-link and no password: do not link this host at echovrce.com/device now")
 	cmd.AddCommand(setup)
 	panelInstallCmds(g, cmd)
-	cmd.AddCommand(panelPasswordCmd(g), panelLoginCmd(g))
+	cmd.AddCommand(panelPasswordCmd(g), panelLoginCmd(g), panelPluginCmd(g))
 	cmd.AddCommand(&cobra.Command{
 		Use: "info", Short: "Show the panel connection",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -351,6 +351,7 @@ func serverCmd(g *globals) *cobra.Command {
 	create.Flags().StringVar(&regions, "regions", "", "comma-separated regions")
 	create.Flags().StringVar(&guilds, "guilds", "", "comma-separated guild IDs")
 	cmd.AddCommand(create)
+	cmd.AddCommand(serverAPICmd(g), serverTelemetryCmd(g), serverMatchCmd(g))
 	for _, sig := range []string{"start", "stop", "restart", "kill"} {
 		sig := sig
 		cmd.AddCommand(&cobra.Command{

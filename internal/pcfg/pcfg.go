@@ -96,6 +96,9 @@ type Panel struct {
 	Alias  string `yaml:"alias,omitempty"`
 	// WingsData is where Wings keeps server volumes (for status files).
 	WingsData string `yaml:"wings_data,omitempty"`
+	// NoPlugin: the Echo VR match plugin was removed on purpose; setup leaves
+	// the panel without it.
+	NoPlugin bool `yaml:"no_plugin,omitempty"`
 }
 
 // Resources for new servers (0 = unlimited).

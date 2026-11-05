@@ -128,6 +128,9 @@ evr-ptero server edit NAME --tick-rate 90 --regions euw,default
 evr-ptero server start|stop|restart|kill NAME…
 evr-ptero server logs NAME               follow the console
 evr-ptero server reinstall|rm NAME
+evr-ptero server match NAME              the current or last match (match stats)
+evr-ptero server api|telemetry on|off NAME   the game's session API / nevr-runtime's telemetry stream
+evr-ptero panel plugin install|remove|status   the panel's match plugin (Pelican)
 evr-ptero account code|set|test|servers  console code (default) or password sign-in; updates every server
 evr-ptero runtime ls|use TAG|rollback|remove TAG
 evr-ptero update [check|ls|apply|settings]   evr-ptero itself, game files, nevr-runtime, panel, Wings
@@ -147,6 +150,20 @@ sudo evr-ptero init --mode install --product pelican --fqdn panel.example.org --
 Without `--discord-id` and `--password-stdin` each server signs in by the code on its console (nevr-runtime 6.9.0+);
 pass them to sign in with the password instead (`evr-ptero account set` adds it later, `evr-ptero account code` goes
 back).
+
+## Match stats in the panel
+
+On Pelican, setup installs the plugin **echovr-match** (`evr-ptero panel plugin install|remove|status`). It reads what each
+server's supervisor writes into its volume through Wings, so the panel needs no access to the node's disk:
+
+- a match widget above the console: mode, map, score, clock and players;
+- a **Match** page per server: scoreboard, teams with ping and stats, events and play-by-play, the server's health,
+  finished matches, and a live map of the arena (players' heads and the disc, 5 times a second, to scale);
+- an admin overview of every Echo VR server's match.
+
+The game's session API (`EnableAPIAccess`) is on by default. Anyone with console access can switch it, and the telemetry
+stream, on the Match page. You can also use `evr-ptero server api|telemetry on|off NAME` or the dashboard (`t`, `T`). The
+plugin's `config/echovr-match.php` sets the refresh times (`poll`) and the live map's rate (`live_ms`, `0` = off).
 
 ## Updates
 

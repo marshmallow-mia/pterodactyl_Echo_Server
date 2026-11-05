@@ -1,0 +1,16 @@
+{
+    "id": "echovr-match",
+    "name": "Echo VR match stats",
+    "author": "marshmallow-mia",
+    "version": "1.0.0",
+    "description": "Live matches of Echo VR (nevr-runtime) servers: mode, map, score, clock, players and their stats, events and finished matches, plus the switch for the game's session API.",
+    "category": "plugin",
+    "url": "https://github.com/marshmallow-mia/pterodactyl_Echo_Server",
+    "update_url": null,
+    "namespace": "MarshmallowMia\\EchoVrMatch",
+    "class": "EchoVrMatchPlugin",
+    "panels": ["admin", "server"],
+    "panel_version": null,
+    "api_version": 1,
+    "composer_packages": null
+}
