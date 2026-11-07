@@ -158,7 +158,9 @@ server's supervisor writes into its volume through Wings, so the panel needs no 
 
 - a match widget above the console: mode, map, score, clock and players;
 - a **Match** page per server: scoreboard, teams with ping and stats, events and play-by-play, the server's health,
-  finished matches, and a live map of the arena (players' heads and the disc, 5 times a second, to scale);
+  finished matches, and a live map seen from above (players' heads and the disc, 5 times a second, to scale) of the arena
+  and of the social lobby (with its arena and combat sections, drawn by Spritz Metis Sprock). The lobby's map needs the
+  telemetry stream on and a nevr-runtime that sends lobby players (nevr-runtime #2306);
 - an admin overview of every Echo VR server's match.
 
 The game's session API (`EnableAPIAccess`) is on by default. Anyone with console access can switch it, and the telemetry
