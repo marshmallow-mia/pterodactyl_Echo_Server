@@ -17,7 +17,10 @@
     $disc = count($m['disc']['pos'] ?? []) === 3 ? $m['disc']['pos'] : null;
     $drawing = Format::mapDrawing($m['map'] ?? null);
     $b = $m['bounds'] ?? null;
-    $liveUrl = $drawing && !empty($live['url']) && ($live['ms'] ?? 0) > 0 ? $live['url'] : null;
+    // In a lobby the game refuses /session: the supervisor writes live.json from
+    // nEVR's telemetry instead, and the map shows while it does ($live['now']).
+    $lobby = Format::isLobby($m);
+    $liveUrl = $drawing && !empty($live['url']) && ($live['ms'] ?? 0) > 0 && ($live['now'] ?? true) ? $live['url'] : null;
 @endphp
 @if ((count($dots) > 0 || $liveUrl) && ($drawing || $b))
     @php
@@ -45,12 +48,13 @@
         $font = round($r * ($drawing ? 1.9 : 1.3), 2);
         $cfg = [
             'url' => $liveUrl, 'ms' => (int) ($live['ms'] ?? 0), 'r' => $r, 'label' => $label, 'font' => $font,
-            'view' => [$minZ, $minX, $w, $h], 'colors' => ['blue' => Format::teamColor('blue'), 'orange' => Format::teamColor('orange')],
+            'view' => [$minZ, $minX, $w, $h],
+            'colors' => ['blue' => Format::teamColor('blue'), 'orange' => Format::teamColor('orange'), 'social' => Format::teamColor('social')],
         ];
     @endphp
     <x-filament::section :heading="trans('echovr-match::match.map')" collapsible>
         <svg viewBox="{{ $view }}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="{{ trans('echovr-match::match.map') }}"
-            style="width:100%;{{ $drawing ? 'aspect-ratio:' . $w . '/' . $h . ';background:#16161a' : 'max-height:22rem;background:rgb(127 127 127 / .08)' }};border-radius:.5rem;display:block">
+            style="width:100%;{{ $drawing ? 'aspect-ratio:' . $w . '/' . $h . ';max-height:80vh;background:#16161a' : 'max-height:22rem;background:rgb(127 127 127 / .08)' }};border-radius:.5rem;display:block">
             @if ($drawing)
                 <image href="{{ $drawing['url'] }}" x="{{ $minZ }}" y="{{ $minX }}" width="{{ $w }}" height="{{ $h }}" preserveAspectRatio="none" />
             @endif
@@ -76,7 +80,7 @@
             </g>
         </svg>
         <p style="margin-top:.5rem;font-size:.75rem;opacity:.6">
-            {{ trans($drawing ? 'echovr-match::match.map_note_drawn' : 'echovr-match::match.map_note') }}
+            {{ trans($lobby && $drawing ? 'echovr-match::match.map_note_lobby' : ($drawing ? 'echovr-match::match.map_note_drawn' : 'echovr-match::match.map_note')) }}
             @if (isset($m['disc']['bounces'])) · {{ trans('echovr-match::match.bounces', ['n' => $m['disc']['bounces']]) }} @endif
         </p>
     </x-filament::section>

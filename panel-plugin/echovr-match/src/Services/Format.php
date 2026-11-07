@@ -9,6 +9,9 @@ class Format
 
     public const ORANGE = '#f97316';
 
+    /** A social lobby's players (team 3). */
+    public const SOCIAL = '#a3e635';
+
     /** @var array<string, string> */
     private const GAME_TYPES = [
         'echo_arena' => 'Arena',
@@ -61,6 +64,7 @@ class Format
      */
     private const MAPS = [
         'mpl_arena_a' => [-80, -18, 160, 36],
+        'mpl_lobby_b2' => [-85, -65, 110, 150], // with its arena and combat sections
     ];
 
     /** The drawing's file of a level, or null. */
@@ -226,6 +230,7 @@ class Format
         return match ($team) {
             'blue' => self::BLUE,
             'orange' => self::ORANGE,
+            'social' => self::SOCIAL,
             default => 'inherit',
         };
     }
