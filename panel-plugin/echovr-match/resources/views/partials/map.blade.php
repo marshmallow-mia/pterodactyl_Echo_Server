@@ -1,7 +1,8 @@
 @php
     use MarshmallowMia\EchoVrMatch\Services\Format;
-    // Top-down view of the players' heads and the disc on the floor plane, in
-    // the game's meters: z (goal to goal) runs left to right, x top to bottom.
+    // The players' heads and the disc on the floor plane seen from above, in
+    // the game's meters: z (goal to goal) runs left to right, x bottom to top
+    // (the map's y is -x; x down would be the view from below).
     // A level with a drawing (Format::mapDrawing) shows it at its true size,
     // and its dots follow the server's live.json several times a second
     // (echovrLiveMap); otherwise the box is what the match has seen so far, at
@@ -30,14 +31,15 @@
             $label = '#e6e6ee';
         } else {
             $pad = 2;
-            [$minX, $maxX, $minZ, $maxZ] = [$b['min_x'] - $pad, $b['max_x'] + $pad, $b['min_z'] - $pad, $b['max_z'] + $pad];
+            // $minX/$maxX are the map's y range, -x: the box's top is the largest x.
+            [$minX, $maxX, $minZ, $maxZ] = [-$b['max_x'] - $pad, -$b['min_x'] + $pad, $b['min_z'] - $pad, $b['max_z'] + $pad];
             if ($maxX - $minX < 12) { $c = ($minX + $maxX) / 2; $minX = $c - 6; $maxX = $c + 6; }
             if ($maxZ - $minZ < 12) { $c = ($minZ + $maxZ) / 2; $minZ = $c - 6; $maxZ = $c + 6; }
             [$w, $h] = [$maxZ - $minZ, $maxX - $minX];
             $r = max($w, $h) / 70;
             $label = 'currentColor';
         }
-        $at = fn ($x, $z) => [round($z, 2), round($x, 2)];
+        $at = fn ($x, $z) => [round($z, 2), round(-$x, 2)];
         $view = implode(' ', array_map(fn ($v) => round($v, 2), [$minZ, $minX, $w, $h]));
         // A label sits above its dot (below it at the top edge) and stays inside the map; the
         // live script places it the same way.

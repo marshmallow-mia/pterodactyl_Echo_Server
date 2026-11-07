@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="-80 -18 160 36" preserveAspectRatio="xMidYMid meet">
 
-<rect x="-80" y="-18" width="160" height="36" fill="none" stroke="#3a3a44" stroke-width="0.1" />
+<g transform="scale(1,-1)"><rect x="-80" y="-18" width="160" height="36" fill="none" stroke="#3a3a44" stroke-width="0.1" />
 <line x1="-79" y1="-18" x2="-79" y2="18" stroke="#23232b" stroke-width="0.05" />
 <line x1="-78" y1="-18" x2="-78" y2="18" stroke="#23232b" stroke-width="0.05" />
 <line x1="-77" y1="-18" x2="-77" y2="18" stroke="#23232b" stroke-width="0.05" />
@@ -1248,4 +1248,4 @@
 <circle cx="59.08" cy="2.65" r="0.18" fill="#9a9aa8" />
 <line x1="59.08" y1="4.29" x2="60.92" y2="7.91" stroke="#9a9aa8" stroke-width="0.07" />
 <circle cx="59.08" cy="4.29" r="0.18" fill="#9a9aa8" />
-</svg>
+</g></svg>

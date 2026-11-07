@@ -47,7 +47,7 @@
                 seen.add(p.name);
                 const g = els.get(p.name) || newPlayer(p.name);
                 const pos = lerp((pa.get(p.name) || p).pos, (pb.get(p.name) || p).pos, k);
-                const cx = round(pos[2]), cy = round(pos[0]);
+                const cx = round(pos[2]), cy = round(-pos[0]); // seen from above: x up
                 g.style.transform = `translate(${cx}px,${cy}px)`;
                 g.setAttribute('opacity', p.stunned ? '.45' : '1');
                 const c = g.querySelector('circle');
@@ -63,7 +63,7 @@
                 const d = near.disc && near.disc.length === 3 ? lerp(a.disc, b.disc, k) || near.disc : null;
                 if (d) {
                     disc.removeAttribute('display');
-                    disc.style.transform = `translate(${round(d[2])}px,${round(d[0])}px)`;
+                    disc.style.transform = `translate(${round(d[2])}px,${round(-d[0])}px)`;
                 } else {
                     disc.setAttribute('display', 'none');
                 }

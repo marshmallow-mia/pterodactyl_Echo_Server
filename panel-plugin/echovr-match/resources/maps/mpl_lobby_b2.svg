@@ -1,7 +1,7 @@
-<!-- Echo VR lobby (mpl_lobby_b2) with its arena and combat sections, top-down in meters; map by Spritz Metis Sprock -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-85 -65 110 150" preserveAspectRatio="xMidYMid meet">
+<!-- Echo VR lobby (mpl_lobby_b2) with its arena and combat sections, seen from above (x mirrored), meters; map by Spritz Metis Sprock -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-85 -85 110 150" preserveAspectRatio="xMidYMid meet">
 
-<rect x="-85" y="-65" width="110" height="150" fill="none" stroke="#3a3a44" stroke-width="0.1" />
+<g transform="scale(1,-1)"><rect x="-85" y="-65" width="110" height="150" fill="none" stroke="#3a3a44" stroke-width="0.1" />
 <line x1="-84" y1="-65" x2="-84" y2="85" stroke="#23232b" stroke-width="0.05" />
 <line x1="-83" y1="-65" x2="-83" y2="85" stroke="#23232b" stroke-width="0.05" />
 <line x1="-82" y1="-65" x2="-82" y2="85" stroke="#23232b" stroke-width="0.05" />
@@ -2544,6 +2544,6 @@
 <path d="M -12.85 2.33 L -6.67 5.9 L -6.55 5.97 L -6.55 6 L -6.57 6.02 L -6.62 6.03 L -6.81 5.93 L -9.58 4.33 L -9.97 4.09 L -12.85 2.44 L -12.88 2.39 Z" fill="none" fill-rule="evenodd" stroke="#d870d8" stroke-width="0.2" stroke-opacity="0.35" />
 <path d="M -1.9 8.65 L 0.82 10.23 L 1.02 10.33 L 1.5 10.62 L 4.42 12.3 L 4.4 12.34 L 4.33 12.35 L -1.77 8.83 L -1.91 8.74 L -1.93 8.7 Z" fill="none" fill-rule="evenodd" stroke="#d870d8" stroke-width="0.2" stroke-opacity="0.35" />
 <circle cx="0" cy="0" r="0.6" fill="none" stroke="#ccc" stroke-width="0.12" />
-<text x="-18" y="-30" font-size="1" text-anchor="middle" fill="#a9bedf" stroke="#16161a" stroke-width="0.14" paint-order="stroke">arena section</text>
-<text x="-30" y="30" font-size="1" text-anchor="middle" fill="#e0b0bc" stroke="#16161a" stroke-width="0.14" paint-order="stroke">combat section</text>
+</g><text x="-18" y="30" font-size="1" text-anchor="middle" fill="#a9bedf" stroke="#16161a" stroke-width="0.14" paint-order="stroke">arena section</text>
+<text x="-30" y="-30" font-size="1" text-anchor="middle" fill="#e0b0bc" stroke="#16161a" stroke-width="0.14" paint-order="stroke">combat section</text>
 </svg>

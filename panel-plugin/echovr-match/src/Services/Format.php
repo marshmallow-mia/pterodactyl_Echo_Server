@@ -58,13 +58,14 @@ class Format
     ];
 
     /**
-     * Levels with a top-down drawing for the live map: the drawing's box in the
-     * game's meters as [min z, min x, width (z), height (x)]; z runs left to
-     * right, x top to bottom, like /session's positions.
+     * Levels with a drawing for the live map, seen from above: the drawing's
+     * box in the game's meters as [min z, min -x, width (z), height (x)]. z runs
+     * left to right and x bottom to top (the map's y is -x): with y up, x down
+     * would show the level from below (tools/topview.py).
      */
     private const MAPS = [
         'mpl_arena_a' => [-80, -18, 160, 36],
-        'mpl_lobby_b2' => [-85, -65, 110, 150], // with its arena and combat sections
+        'mpl_lobby_b2' => [-85, -85, 110, 150], // x -65..85, with its arena and combat sections
     ];
 
     /** The drawing's file of a level, or null. */
