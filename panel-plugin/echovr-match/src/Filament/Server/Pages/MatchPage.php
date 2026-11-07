@@ -9,6 +9,7 @@ use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use MarshmallowMia\EchoVrMatch\Services\Format;
 use MarshmallowMia\EchoVrMatch\Services\MatchReader;
 use Throwable;
 
@@ -89,9 +90,10 @@ class MatchPage extends Page
     protected function getViewData(): array
     {
         $server = $this->server();
+        $match = MatchReader::match($server);
 
         return [
-            'match' => MatchReader::match($server),
+            'match' => $match,
             'status' => MatchReader::status($server)['data'],
             'history' => MatchReader::history($server),
             'apiOn' => MatchReader::apiSetting($server),
@@ -99,6 +101,10 @@ class MatchPage extends Page
             'live' => [
                 'url' => \Illuminate\Support\Facades\Route::has('echovr-match.live') ? route('echovr-match.live', ['server' => $server->uuid]) : null,
                 'ms' => (int) config('echovr-match.live_ms', 200),
+                // A lobby's positions come only from nEVR's telemetry: its map
+                // shows while the server writes them (a runtime from
+                // nevr-runtime #2306 on, telemetry on).
+                'now' => Format::isLobby($match['data'] ?? null) ? MatchReader::live($server) !== null : true,
             ],
         ];
     }

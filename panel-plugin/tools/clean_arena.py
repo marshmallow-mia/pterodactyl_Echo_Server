@@ -1,8 +1,12 @@
 # Usage: python3 -I tools/clean_arena.py arena-topdown-v3.svg echovr-match/resources/maps/mpl_arena_a.svg
 """Cleans arena-topdown-v3.svg for the live map: no text, no label boxes, no
 title or legend, cropped to the arena frame (z -80..80, x -18..18, meters),
-goal colours as in /session (blue defends -z), coordinates rounded."""
-import re, sys, xml.etree.ElementTree as ET
+goal colours as in /session (blue defends -z), coordinates rounded, seen from
+above (topview.py: x mirrored, viewBox -80 -18 160 36)."""
+import os, re, sys, xml.etree.ElementTree as ET
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from topview import top_view
 
 NS = "http://www.w3.org/2000/svg"
 ET.register_namespace("", NS)
@@ -43,6 +47,7 @@ for e in list(root):
             e.set(a, re.sub(r"-?\d+\.\d+(?:e-?\d+)?", lambda m: f"{float(m.group()):.2f}".rstrip("0").rstrip("."), e.get(a)))
 
 root.set("viewBox", "-80 -18 160 36")
+top_view(root, (-80, -18, 160, 36))
 for a in ("width", "height"):
     root.attrib.pop(a, None)
 root.set("preserveAspectRatio", "xMidYMid meet")
