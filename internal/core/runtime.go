@@ -107,7 +107,12 @@ func (a *App) ApplyRuntimePolicy(ctx context.Context, restart bool, say func(str
 		if err := a.UpdateServer(ctx, s, func(*instance.Settings) {}, false); err != nil {
 			return fmt.Errorf("%s: %w", s.Name(), err)
 		}
+		rt := SettingsFromEnv(s.Panel.Env()).Runtime
 		switch {
+		case rt != "" && rt != "current":
+			// pinned: it runs its release with the runtime's own update off
+			// whatever the policy is, so it isn't restarted for it
+			say(s.Name() + ": updated; pinned to " + rt + ", so not restarted")
 		case !restart || s.Power != "running" || a.Secrets[pcfg.SecretClientKey] == "":
 			say(s.Name() + ": updated; takes it at its next start")
 		case s.Busy():

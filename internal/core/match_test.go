@@ -107,8 +107,18 @@ func TestApplyAccountGivesUpOnALongMatch(t *testing.T) {
 func TestApplyAccountStopsWaitingOnCancel(t *testing.T) {
 	shortMatchWait(t, time.Minute)
 	a, power := fakeFleet(t, t.TempDir())
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	// Cancel once the idle server was restarted, i.e. while waiting for the
+	// match (a fixed timeout could end during the first listing, which then
+	// sees no running server and has nothing to wait for).
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	go func() {
+		for len(power()) == 0 && ctx.Err() == nil {
+			time.Sleep(5 * time.Millisecond)
+		}
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
 	done := make(chan error, 1)
 	go func() { done <- a.ApplyAccount(ctx, func(string) {}) }()
 	var err error
