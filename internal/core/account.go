@@ -197,7 +197,7 @@ func (a *App) restartAfterMatch(ctx context.Context, waiting []Server, say func(
 			s, ok := now[w.Panel.UUID]
 			switch {
 			case !ok || s.Power != "running":
-				say(w.Name() + ": stopped; it uses the new account when it starts")
+				say(w.Name() + ": stopped; it takes the change when it starts")
 			case s.Busy():
 				left = append(left, s)
 			default:
