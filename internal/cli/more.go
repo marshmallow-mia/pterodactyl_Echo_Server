@@ -122,7 +122,7 @@ func runtimeCmd(g *globals) *cobra.Command {
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
-		Use: "updater nevr|evr-ptero", Short: "Choose who keeps the runtime current: nEVR itself (6.17.0 on) or evr-ptero",
+		Use: "updater nevr|evr-ptero", Short: "Choose who keeps the runtime current: nEVR itself (6.18.0 on) or evr-ptero",
 		Args: cobra.ExactArgs(1), ValidArgs: []string{pcfg.UpdaterNevr, pcfg.UpdaterHost},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return applyPolicy(cmd, args[0], "", "")
@@ -545,7 +545,7 @@ the panel is backed up first and restored if the update fails).
 	}
 	sf.StringVar(&window, "window", "", `automatic installs only in this local time window, e.g. 04:00-06:00 ("" = any time)`)
 	sf.StringVar(&rtChannel, "runtime-channel", "", `nEVR channel nevr-runtime follows (stable, beta, ...) or pinned:TAG`)
-	sf.StringVar(&rtUpdater, "runtime-updater", "", `who keeps nevr-runtime current: nevr (itself, 6.17.0 on) or evr-ptero`)
+	sf.StringVar(&rtUpdater, "runtime-updater", "", `who keeps nevr-runtime current: nevr (itself, 6.18.0 on) or evr-ptero`)
 	sf.StringVar(&channel, "panel-channel", "", `panel releases to follow: stable or beta (Pterodactyl; "" = the installed one)`)
 	sf.IntVar(&hours, "check-hours", 0, "hours between checks")
 	cmd.AddCommand(settings)

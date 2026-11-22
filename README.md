@@ -207,10 +207,10 @@ manifest (`stable` unless picked; `beta`, ...). `evr-ptero runtime updater` deci
 
 - `nevr` (the default for new nodes): the runtime updates itself and follows the channel. evr-ptero still installs
   that channel's release into the shared files (the host `BugSplat64.dll` comes only from there) and never moves a
-  runtime nEVR put in place backwards. A runtime before 6.17.0 can't update itself; evr-ptero keeps it on the channel's
+  runtime nEVR put in place backwards. Only 6.18.0 on can be left to update itself (6.17.x refuses the `update:` section of config.yaml that picks the channel, so it gets `-no-update`); evr-ptero keeps it on the channel's
   release until it can.
 - `evr-ptero` (nodes set up before this version keep it): evr-ptero updates with the canary above, and each server
-  starts with `-no-update`, `update.enabled: false` and without what the runtime staged. Only here can a version be
+  starts with `-no-update` (and from 6.18.0 `update.enabled: false`) and without what the runtime staged. Only here can a version be
   pinned (`runtime channel pinned v6.17.0`).
 
 `evr-ptero runtime channel NAME` picks any channel nEVR's manifest lists (`evr-ptero runtime ls` shows them). Both

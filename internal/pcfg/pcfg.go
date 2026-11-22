@@ -111,7 +111,7 @@ type Resources struct {
 
 // RuntimePolicy is the nevr-runtime update policy.
 type RuntimePolicy struct {
-	// Updater is UpdaterNevr (from v6.17.0 on the runtime updates itself to
+	// Updater is UpdaterNevr (from v6.18.0 on the runtime updates itself to
 	// its channel's release; evr-ptero keeps the node's store, and so the
 	// host DLL, on that release) or UpdaterHost (evr-ptero updates it, with
 	// the canary, and turns the runtime's own update off).

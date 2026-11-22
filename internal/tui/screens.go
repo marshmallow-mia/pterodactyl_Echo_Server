@@ -496,7 +496,7 @@ func (m *Model) channelForm() tea.Cmd {
 	f := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().Title("Who updates nevr-runtime?").Options(
-				huh.NewOption("nEVR itself (from 6.17.0 on; evr-ptero keeps the host DLL on the channel's release)", pcfg.UpdaterNevr),
+				huh.NewOption("nEVR itself (from 6.18.0 on; evr-ptero keeps the host DLL on the channel's release)", pcfg.UpdaterNevr),
 				huh.NewOption("evr-ptero (tried on one idle server first; nEVR's own update off)", pcfg.UpdaterHost),
 			).Value(&updater),
 			huh.NewSelect[string]().Title("nEVR channel").Description("The release nEVR's manifest names for the channel.").Options(chOpts...).Value(&channel),
