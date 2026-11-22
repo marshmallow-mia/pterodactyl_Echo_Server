@@ -288,6 +288,11 @@ type Server struct {
 	Power  string // from the client API: running, offline, starting, stopping ("" if unknown)
 }
 
+// Startup is the startup command to keep when a server's image or variables
+// change: its own (an admin may run e.g. "env EVR_TELEMETRY_DUMP=1
+// evr-supervisor"), or the egg's when the panel reports none.
+func Startup(s panel.Server) string { return orStr(s.Container.StartupCommand, "evr-supervisor") }
+
 // Name of the server in the panel.
 func (s Server) Name() string { return s.Panel.Name }
 
@@ -682,7 +687,7 @@ func (a *App) UpdateServer(ctx context.Context, s Server, change func(*instance.
 	}
 	newEnv := a.Env(set, orStr(env["GAME_SOURCE"], a.Cfg.GameSource))
 	p := a.Panel()
-	if err := p.UpdateStartup(ctx, s.Panel, a.Cfg.Panel.EggID, orStr(s.Panel.Container.Image, a.Cfg.Image), "evr-supervisor", newEnv, true); err != nil {
+	if err := p.UpdateStartup(ctx, s.Panel, a.Cfg.Panel.EggID, orStr(s.Panel.Container.Image, a.Cfg.Image), Startup(s.Panel), newEnv, true); err != nil {
 		return err
 	}
 	if restart && a.Secrets[pcfg.SecretClientKey] != "" && s.Power == "running" {

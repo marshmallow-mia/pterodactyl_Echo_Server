@@ -342,7 +342,7 @@ func (a *App) syncServerImages(ctx context.Context, say func(string, string)) er
 		}
 		env := s.Env()
 		newEnv := a.Env(SettingsFromEnv(env), orStr(env["GAME_SOURCE"], a.Cfg.GameSource))
-		if err := a.Panel().UpdateStartup(ctx, s, a.Cfg.Panel.EggID, a.Cfg.Image, "evr-supervisor", newEnv, true); err != nil {
+		if err := a.Panel().UpdateStartup(ctx, s, a.Cfg.Panel.EggID, a.Cfg.Image, Startup(s), newEnv, true); err != nil {
 			return fmt.Errorf("moving %s to %s: %w", s.Name, a.Cfg.Image, err)
 		}
 		n++
