@@ -156,6 +156,28 @@ func (f fleet) Statuses(ctx context.Context) ([]status.Status, error) {
 	return out, nil
 }
 
+var _ update.Followers = fleet{}
+
+// FollowsCurrent implements update.Followers: servers whose NEVR_VERSION is
+// the node's current runtime, as opposed to pinned to one of their own (such
+// a server is never the canary: undoing the canary's pin would drop its own).
+func (f fleet) FollowsCurrent(ctx context.Context) (map[string]bool, error) {
+	app, err := core.Open(f.dir)
+	if err != nil {
+		return nil, err
+	}
+	servers, err := app.Servers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, s := range servers {
+		rt := core.SettingsFromEnv(s.Panel.Env()).Runtime
+		out[s.Name()] = rt == "" || rt == "current"
+	}
+	return out, nil
+}
+
 func (f fleet) Pin(ctx context.Context, name, tag string) error {
 	app, err := core.Open(f.dir)
 	if err != nil {
