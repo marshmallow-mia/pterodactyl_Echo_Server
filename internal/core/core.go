@@ -210,8 +210,9 @@ func (a *App) installDeviceLink(s panel.Server) error {
 
 // InstallFiles puts the game and the runtime into dir (dir/game, dir/nevr).
 // The node uses it for the shared mount; the egg's install script uses it for
-// servers with GAME_SOURCE=download. runtime is a tag or "current" (newest).
-func InstallFiles(ctx context.Context, dir, runtime, mirror string, progress func(step, detail string)) error {
+// servers with GAME_SOURCE=download. runtime is a tag or "current" (the
+// release nEVR's channel names).
+func InstallFiles(ctx context.Context, dir, runtime, channel, mirror string, progress func(step, detail string)) error {
 	say := func(s, d string) {
 		if progress != nil {
 			progress(s, d)
@@ -238,7 +239,7 @@ func InstallFiles(ctx context.Context, dir, runtime, mirror string, progress fun
 			say("Runtime", "nevr-runtime "+cur+" already installed")
 			return chmodShared(dir)
 		}
-		rel, err = c.Newest(ctx, true)
+		rel, err = c.Channel(ctx, channel)
 	} else {
 		rel, err = c.Find(ctx, runtime)
 	}
@@ -402,6 +403,9 @@ func (a *App) Env(set instance.Settings, gameSource string) map[string]string {
 	}
 	if set.LogAll {
 		env["EVR_LOG"] = "all"
+	}
+	for k, v := range a.Cfg.Runtime.SelfUpdateEnv() {
+		env[k] = v
 	}
 	return env
 }

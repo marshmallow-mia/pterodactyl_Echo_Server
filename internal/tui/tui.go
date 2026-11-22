@@ -95,6 +95,9 @@ type Model struct {
 
 	rtTable  table.Model
 	runtimes []nevr.Installed
+	// channels and chVersions are nEVR's channels as the runtime screen last read them.
+	channels   []string
+	chVersions map[string]string
 
 	infoTitle, infoText string
 
@@ -294,6 +297,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case runtimesMsg:
 		m.runtimes = msg.list
+		m.channels, m.chVersions = msg.channels, msg.versions
 		if msg.err != nil {
 			m.flash, m.flashBad = msg.err.Error(), true
 		}

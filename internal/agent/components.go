@@ -31,7 +31,7 @@ func Components(app *core.App, log func(string)) []updates.Component {
 		comps = append(comps, &updates.Game{In: game.Installer{Dir: gameDir}})
 	}
 	comps = append(comps, &updates.Runtime{U: Updater(app, log), Policy: func() update.Policy {
-		return update.Policy{Channel: app.Cfg.Runtime.Channel, Pinned: app.Cfg.Runtime.Pinned}
+		return app.Policy()
 	}})
 	if inst, err := panelinstall.DetectInstalled(); err == nil {
 		if inst.Dir != "" && inst.Panel != "" {

@@ -132,7 +132,9 @@ evr-ptero server match NAME              the current or last match (match stats)
 evr-ptero server api|telemetry on|off NAME   the game's session API / nevr-runtime's telemetry stream
 evr-ptero panel plugin install|remove|status   the panel's match plugin (Pelican)
 evr-ptero account code|set|test|servers  console code (default) or password sign-in; updates every server
-evr-ptero runtime ls|use TAG|rollback|remove TAG
+evr-ptero runtime ls|use TAG|rollback|remove TAG|unmark TAG
+evr-ptero runtime channel stable|beta|...|pinned TAG   the nEVR channel the runtime follows
+evr-ptero runtime updater nevr|evr-ptero              who keeps the runtime current
 evr-ptero update [check|ls|apply|settings]   evr-ptero itself, game files, nevr-runtime, panel, Wings
 evr-ptero agent install|uninstall|run|webhook URL  metrics, Discord alerts, automatic runtime updates
 evr-ptero files install                  game and runtime into a directory
@@ -178,7 +180,7 @@ the version), `c` checks again, `s` sets how each part is updated:
 |---|---|---|
 | `evr-ptero` | downloads the new release, checks it against `checksums.txt`, replaces the binary (the old one stays as `evr-ptero.prev`) and restarts; the egg and the servers move to the image released with it, each server at its next restart | notify |
 | game files | fetches missing or changed files of the node's shared copy from the mirror and verifies the build; servers use them from their next restart. Echo VR no longer changes, so this is a repair | notify |
-| nevr-runtime | installs the version of the runtime channel and tries it on one idle server first; only if that server registers do the others switch, at their next match boundary. A version that fails is skipped | auto |
+| nevr-runtime | installs the release nEVR's channel names (see below) and tries it on one idle server first; only if that server registers do the others switch, at their next match boundary. A version that fails is skipped (`evr-ptero runtime unmark TAG` allows it again) | auto |
 | panel | backs up the panel files and database to `/var/backups/evr-ptero` (the last 3 are kept), maintenance mode, the new release, `composer install`, migrations, queue restart. If the panel API does not answer afterwards, the backup is restored | notify |
 | Wings | replaces the binary and restarts Wings; game servers keep running. If Wings does not come back, the old binary is put back | notify |
 
@@ -193,9 +195,28 @@ evr-ptero update                                   check everything
 evr-ptero update ls self|game|runtime|panel|wings  versions to choose from
 evr-ptero update apply panel [--version V] [--dry-run]
 evr-ptero update settings --panel notify --wings auto --window 04:00-06:00 [--panel-channel beta]
+evr-ptero update settings --runtime-channel beta --runtime-updater nevr
 ```
 
 Mods will be one more part here.
+
+### Who updates nevr-runtime
+
+From nevr-runtime 6.17.0 on the runtime updates itself at launch to the release its nEVR channel names in nEVR's
+manifest (`stable` unless picked; `beta`, ...). `evr-ptero runtime updater` decides who does it:
+
+- `nevr` (the default for new nodes): the runtime updates itself and follows the channel. evr-ptero still installs
+  that channel's release into the shared files (the host `BugSplat64.dll` comes only from there) and never moves a
+  runtime nEVR put in place backwards. A runtime before 6.17.0 can't update itself; evr-ptero keeps it on the channel's
+  release until it can.
+- `evr-ptero` (nodes set up before this version keep it): evr-ptero updates with the canary above, and each server
+  starts with `-no-update`, `update.enabled: false` and without what the runtime staged. Only here can a version be
+  pinned (`runtime channel pinned v6.17.0`).
+
+`evr-ptero runtime channel NAME` picks any channel nEVR's manifest lists (`evr-ptero runtime ls` shows them). Both
+settings reach the servers as the egg variables `EVR_RUNTIME_UPDATER` and `NEVR_UPDATE_CHANNEL` (admin-only); a change
+restarts idle servers and the others once their match ends. Nodes from before followed GitHub's newest release
+(`pre`), which no nEVR channel does; they move to `stable`.
 
 ## Alerts and metrics
 

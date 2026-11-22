@@ -11,7 +11,7 @@
     "docker_images": {
         "Echo VR nevr": "ghcr.io/marshmallow-mia/echovr-pterodactyl:edge"
     },
-    "exported_at": "2026-10-30T14:37:51Z",
+    "exported_at": "2026-11-22T12:21:50Z",
     "features": null,
     "file_denylist": [],
     "meta": {
@@ -23,7 +23,7 @@
         "installation": {
             "container": "ghcr.io/marshmallow-mia/echovr-pterodactyl:edge",
             "entrypoint": "bash",
-            "script": "#!/bin/bash\n# Echo VR (nevr-runtime) installer. With GAME_SOURCE=mount nothing is copied:\n# the node provides the game and runtime read-only at /opt/echovr.\nset -euo pipefail\nif [ \"${GAME_SOURCE:-mount}\" != \"download\" ]; then\n  echo \"Game files come from the node's shared mount (/opt/echovr). Nothing to install.\"\n  exit 0\nfi\nevr-ptero files install --dir /mnt/server/echovr --runtime \"${NEVR_VERSION:-current}\"\n"
+            "script": "#!/bin/bash\n# Echo VR (nevr-runtime) installer. With GAME_SOURCE=mount nothing is copied:\n# the node provides the game and runtime read-only at /opt/echovr.\nset -euo pipefail\nif [ \"${GAME_SOURCE:-mount}\" != \"download\" ]; then\n  echo \"Game files come from the node's shared mount (/opt/echovr). Nothing to install.\"\n  exit 0\nfi\nevr-ptero files install --dir /mnt/server/echovr --runtime \"${NEVR_VERSION:-current}\" --channel \"${NEVR_UPDATE_CHANNEL:-stable}\"\n"
         }
     },
     "startup": "evr-supervisor",
@@ -100,12 +100,32 @@
         },
         {
             "name": "nevr-runtime version",
-            "description": "\"current\" follows the node's current runtime (updated by evr-ptero); or pin a tag like v6.6.0.",
+            "description": "\"current\" follows the node's current runtime (the nEVR channel's release); or pin a tag like v6.6.0 (the runtime then never updates itself).",
             "env_variable": "NEVR_VERSION",
             "default_value": "current",
             "user_viewable": true,
             "user_editable": false,
             "rules": "required|string|regex:/^(current)?(v[0-9]+\\.[0-9]+\\.[0-9]+[0-9A-Za-z.-]*)?$/",
+            "field_type": "text"
+        },
+        {
+            "name": "nevr-runtime updater",
+            "description": "Who keeps nevr-runtime 6.17.0+ current: \"nevr\" (it updates itself to the channel's release) or \"host\" (evr-ptero does; the runtime's own update is off). Set by evr-ptero runtime updater.",
+            "env_variable": "EVR_RUNTIME_UPDATER",
+            "default_value": "host",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|string|in:nevr,host",
+            "field_type": "text"
+        },
+        {
+            "name": "nEVR channel",
+            "description": "The nEVR channel the runtime follows (stable, beta, ...). Set by evr-ptero runtime channel.",
+            "env_variable": "NEVR_UPDATE_CHANNEL",
+            "default_value": "stable",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|string|regex:/^[a-z]+$/",
             "field_type": "text"
         },
         {

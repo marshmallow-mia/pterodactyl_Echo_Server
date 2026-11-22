@@ -220,7 +220,11 @@ func Setup(ctx context.Context, dir string, o SetupOptions, say func(step, detai
 
 	// Shared files.
 	if cfg.GameSource == "mount" && !o.SkipFiles {
-		if err := InstallFiles(ctx, cfg.DataDir, "", "", say); err != nil {
+		runtime := ""
+		if cfg.Runtime.Channel == "pinned" {
+			runtime = cfg.Runtime.Pinned
+		}
+		if err := InstallFiles(ctx, cfg.DataDir, runtime, cfg.Runtime.Channel, "", say); err != nil {
 			return a, err
 		}
 	}
@@ -230,6 +234,11 @@ func Setup(ctx context.Context, dir string, o SetupOptions, say func(step, detai
 		return a, err
 	}
 	if err := a.syncServerImages(ctx, say); err != nil {
+		return a, err
+	}
+	// Servers from before runtime.updater get who updates and the channel;
+	// they take it (and the image) at their next start.
+	if err := a.ApplyRuntimePolicy(ctx, false, func(s string) { say("Runtime", s) }); err != nil {
 		return a, err
 	}
 	a.syncPlugin(ctx, say)

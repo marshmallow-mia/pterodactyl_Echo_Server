@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -34,8 +35,10 @@ func (e linkFailed) Unwrap() error { return e.error }
 
 type (
 	runtimesMsg struct {
-		list []nevr.Installed
-		err  error
+		list     []nevr.Installed
+		err      error
+		channels []string          // nEVR's channels, stable first
+		versions map[string]string // channel → version
 	}
 	legacyMsg struct {
 		list []core.LegacyServer
@@ -347,10 +350,13 @@ func (m *Model) openRuntime() tea.Cmd {
 }
 
 func (m *Model) loadRuntimes() tea.Cmd {
-	st := m.App.Store()
+	st, app, ctx := m.App.Store(), m.App, m.Ctx
 	return func() tea.Msg {
 		list, err := st.List()
-		return runtimesMsg{list, err}
+		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		names, versions, _ := app.Channels(cctx)
+		return runtimesMsg{list: list, err: err, channels: names, versions: versions}
 	}
 }
 
@@ -376,7 +382,7 @@ func (m *Model) refreshRuntimes() {
 }
 
 func (m *Model) policy() update.Policy {
-	return update.Policy{Channel: m.App.Cfg.Runtime.Channel, Pinned: m.App.Cfg.Runtime.Pinned}
+	return m.App.Policy()
 }
 
 func (m *Model) updateRuntime(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -449,6 +455,16 @@ func (m *Model) updateRuntime(msg tea.Msg) (tea.Model, tea.Cmd) {
 			say(fmt.Sprintf("%s: %s → %s %s", res.Action, res.From, res.To, res.Detail))
 			return nil
 		}, reload)
+	case "m":
+		if sel == nil || sel.Bad == "" {
+			return m, nil
+		}
+		if err := app.Store().Unmark(sel.Tag); err != nil {
+			m.flash, m.flashBad = err.Error(), true
+		} else {
+			m.flash, m.flashBad = sel.Tag+" may be used again (enter uses it)", false
+		}
+		return m, m.loadRuntimes()
 	case "c":
 		return m, m.channelForm()
 	}
@@ -459,52 +475,75 @@ func (m *Model) updateRuntime(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) channelForm() tea.Cmd {
 	app := m.App
-	channel, pinned, auto := app.Cfg.Runtime.Channel, app.Cfg.Runtime.Pinned, app.Cfg.Updates.Runtime == "auto"
+	updater, channel, pinned := app.Cfg.Runtime.Updater, app.Cfg.Runtime.Channel, app.Cfg.Runtime.Pinned
+	auto := app.Cfg.Updates.Runtime == "auto"
+	names := m.channels
+	if len(names) == 0 {
+		names = []string{nevr.DefaultChannel} // nEVR's manifest couldn't be read
+	}
+	var chOpts []huh.Option[string]
+	for _, n := range names {
+		label := n
+		if v := m.chVersions[n]; v != "" {
+			label += ": nEVR " + v
+		}
+		chOpts = append(chOpts, huh.NewOption(label, n))
+	}
+	if channel != "pinned" && !slices.Contains(names, channel) {
+		chOpts = append(chOpts, huh.NewOption(channel, channel))
+	}
+	chOpts = append(chOpts, huh.NewOption("pinned: stay on one version (evr-ptero updates)", "pinned"))
 	f := huh.NewForm(
 		huh.NewGroup(
-			huh.NewSelect[string]().Title("Which versions should updates follow?").Options(
-				huh.NewOption("pre: newest release incl. pre-releases (every 5.x release is one)", "pre"),
-				huh.NewOption("stable: full releases only", "stable"),
-				huh.NewOption("pinned: stay on one version", "pinned"),
-			).Value(&channel),
+			huh.NewSelect[string]().Title("Who updates nevr-runtime?").Options(
+				huh.NewOption("nEVR itself (from 6.17.0 on; evr-ptero keeps the host DLL on the channel's release)", pcfg.UpdaterNevr),
+				huh.NewOption("evr-ptero (tried on one idle server first; nEVR's own update off)", pcfg.UpdaterHost),
+			).Value(&updater),
+			huh.NewSelect[string]().Title("nEVR channel").Description("The release nEVR's manifest names for the channel.").Options(chOpts...).Value(&channel),
 			huh.NewConfirm().Title("Update automatically?").Description("Needs the background service (More → Discord alerts and the background service).").Value(&auto),
 		).Title("Runtime updates"),
 		huh.NewGroup(
-			huh.NewInput().Title("Pinned version").Description("e.g. v6.6.0").Value(&pinned).Validate(required("the version")),
+			huh.NewInput().Title("Pinned version").Description("e.g. v6.17.0").Value(&pinned).Validate(required("the version")),
 		).WithHideFunc(func() bool { return channel != "pinned" }),
 	)
 	return m.ShowForm(f, func() tea.Cmd {
-		app.Cfg.Runtime.Channel, app.Cfg.Updates.Runtime = channel, "notify"
+		if channel != "pinned" {
+			pinned = ""
+		}
+		app.Cfg.Updates.Runtime = "notify"
 		if auto {
 			app.Cfg.Updates.Runtime = "auto"
 		}
-		app.Cfg.Runtime.Pinned = ""
-		if channel == "pinned" {
-			app.Cfg.Runtime.Pinned = pinned
-		}
-		if err := app.Save(); err != nil {
-			m.flash, m.flashBad = err.Error(), true
-		} else {
-			m.flash, m.flashBad = "runtime updates: "+channel, false
-		}
-		m.screen = scrRuntime
-		return m.loadRuntimes()
+		versions := m.chVersions
+		return m.Run("Saving the runtime settings", func(ctx context.Context, say func(string)) error {
+			if channel == "pinned" && updater == pcfg.UpdaterNevr {
+				say("pinned: evr-ptero updates (nEVR would update itself away from the pin)")
+				updater = pcfg.UpdaterHost
+			}
+			if err := app.SetRuntimePolicy(ctx, updater, channel, pinned); err != nil {
+				return err
+			}
+			say("nevr-runtime: " + app.RuntimePolicyText(versions))
+			if note := app.SelfUpdateNote(versions); note != "" {
+				say("note: " + note)
+			}
+			return app.ApplyRuntimePolicy(ctx, true, say)
+		}, func() tea.Cmd { m.screen = scrRuntime; return m.loadRuntimes() })
 	})
 }
 
 func (m *Model) renderRuntime() string {
-	cfg := m.App.Cfg.Runtime
-	policy := "Updates follow the " + cfg.Channel + " channel"
-	if cfg.Channel == "pinned" {
-		policy = "Pinned to " + cfg.Pinned
-	}
+	policy := m.App.RuntimePolicyText(m.chVersions)
 	switch {
 	case m.App.Cfg.Updates.Runtime == "auto" && agent.ServiceInstalled():
-		policy += "; the background service rolls them out automatically."
+		policy += "; the background service rolls updates out automatically."
 	case m.App.Cfg.Updates.Runtime == "auto":
 		policy += "; automatic updates need the background service (More → Discord alerts and the background service)."
 	default:
 		policy += "; automatic updates are off."
+	}
+	if note := m.App.SelfUpdateNote(m.chVersions); note != "" {
+		policy += " " + note + "."
 	}
 	body := m.rtTable.View()
 	switch {
@@ -515,7 +554,7 @@ func (m *Model) renderRuntime() string {
 	}
 	return m.header() + "  " + ui.Bold.Render("nevr-runtime") + "\n\n" + body + "\n\n" + ui.Subtle.Render(m.wrap(policy, 0)) + "\n" +
 		ui.Subtle.Render("Servers pick up a new current version at their next match boundary, so no match is cut short.") + "\n" +
-		m.footer(ui.K("enter", "use"), ui.K("b", "rollback"), ui.K("x", "delete"), ui.K("u", "check for updates"), ui.K("c", "update settings"), ui.K("esc", "back"))
+		m.footer(ui.K("enter", "use"), ui.K("b", "rollback"), ui.K("x", "delete"), ui.K("m", "allow a failed one again"), ui.K("u", "check for updates"), ui.K("c", "update settings"), ui.K("esc", "back"))
 }
 
 // Alerts and the background service.
