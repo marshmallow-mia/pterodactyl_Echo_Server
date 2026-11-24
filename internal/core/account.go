@@ -221,7 +221,7 @@ func stillInMatch(list []Server, err error) error {
 	for i, s := range list {
 		names[i] = s.Name()
 	}
-	return fmt.Errorf("%s not restarted (%w): they keep the old account until \"evr-ptero server restart\" after their match",
+	return fmt.Errorf("%s not restarted (%w): they take the change at their next start (\"evr-ptero server restart\" after their match)",
 		strings.Join(names, ", "), err)
 }
 

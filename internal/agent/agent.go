@@ -127,7 +127,14 @@ func (a *Agent) checkUpdates(ctx context.Context, app *core.App, host string) {
 // Updater returns an updater for the node's shared runtime store whose
 // canary is pinned through the panel.
 func Updater(app *core.App, log func(string)) *update.Updater {
-	return &update.Updater{Store: app.Store(), Fleet: fleet{dir: app.Dir}, Log: log}
+	dir := app.Dir
+	return &update.Updater{Store: app.Store(), Fleet: fleet{dir: dir}, Log: log, Policy: func() update.Policy {
+		now, err := core.Open(dir)
+		if err != nil {
+			return update.Policy{} // unreadable: not the policy the check started with
+		}
+		return now.Policy()
+	}}
 }
 
 type fleet struct{ dir string }

@@ -542,6 +542,11 @@ the panel is backed up first and restored if the update fails).
 				if err := a.SetRuntimePolicy(cmd.Context(), rtUpdater, rtChannel, pinned); err != nil {
 					return err
 				}
+				if pinned != "" { // installed and switched now, as `runtime use` does
+					if err := a.StayOn(cmd.Context(), pinned); err != nil {
+						return err
+					}
+				}
 			} else if fl.NFlag() > 0 {
 				if err := a.Save(); err != nil {
 					return err

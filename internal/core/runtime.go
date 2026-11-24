@@ -85,11 +85,17 @@ func (a *App) SelfUpdateNote(versions map[string]string) string {
 	return ""
 }
 
-// ApplyRuntimePolicy gives every Echo VR server whose environment differs the
-// runtime policy's (who updates, the channel). The panel hands a server its
-// environment when it starts, so with restart an idle server restarts now and
-// one in a match once the match has ended; without, each takes it at its next
-// start.
+// otherNode reports whether s runs on another node of the panel than the one
+// configured.
+func (a *App) otherNode(s Server) bool {
+	return a.Cfg.Panel.NodeID != 0 && s.Panel.Node != 0 && s.Panel.Node != a.Cfg.Panel.NodeID
+}
+
+// ApplyRuntimePolicy gives every Echo VR server of this node whose
+// environment differs from the runtime policy's (who updates, the channel).
+// The panel hands a server its environment when it starts, so with restart an
+// idle server restarts now and one in a match once the match has ended;
+// without, each takes it at its next start.
 func (a *App) ApplyRuntimePolicy(ctx context.Context, restart bool, say func(string)) error {
 	list, err := a.Servers(ctx)
 	if err != nil {
@@ -98,6 +104,11 @@ func (a *App) ApplyRuntimePolicy(ctx context.Context, restart bool, say func(str
 	want := a.Cfg.Runtime.SelfUpdateEnv()
 	var inMatch []Server
 	for _, s := range list {
+		if a.otherNode(s) {
+			// the policy is this node's (its shared files); and with no
+			// status of it here, a restart couldn't wait for its match
+			continue
+		}
 		env, same := s.Panel.Env(), true
 		for k, v := range want {
 			same = same && env[k] == v
@@ -137,19 +148,25 @@ func (a *App) ApplyRuntimePolicy(ctx context.Context, restart bool, say func(str
 // ApplyRuntimePolicy gives the servers the change.
 func (a *App) StayOn(ctx context.Context, tag string) error {
 	st := a.Store()
-	if _, err := st.Get(tag); err != nil {
+	inst, err := st.Get(tag)
+	if err != nil {
 		rel, err := (&nevr.Client{}).Find(ctx, tag)
 		if err != nil {
 			return err
 		}
-		if _, err := st.Install(ctx, rel); err != nil {
+		if inst, err = st.Install(ctx, rel); err != nil {
 			return err
 		}
 	}
-	if err := st.Use(tag); err != nil {
+	if inst.Bad != "" {
+		return fmt.Errorf("nevr-runtime %s is marked bad: %s (`evr-ptero runtime unmark %s` allows it again)", tag, inst.Bad, tag)
+	}
+	// The pin first: should the switch fail, the next update check still
+	// moves the servers to the version picked, not away from it.
+	if err := a.SetRuntimePolicy(ctx, "", "pinned", tag); err != nil {
 		return err
 	}
-	return a.SetRuntimePolicy(ctx, "", "pinned", tag)
+	return st.Use(tag)
 }
 
 // StayOnPrevious is a rollback that stays: StayOn the previous version.

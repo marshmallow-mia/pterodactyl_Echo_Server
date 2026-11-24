@@ -3,11 +3,16 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/status"
 
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/pcfg"
 )
@@ -70,5 +75,51 @@ func TestStayOnPinsWhatItPicks(t *testing.T) {
 	}
 	if cur := a.Store().Current(); cur != "v6.17.0" || a.Cfg.Runtime.Pinned != "v6.17.0" {
 		t.Fatalf("after a refused pick: current %s, pinned %s", cur, a.Cfg.Runtime.Pinned)
+	}
+}
+
+// The runtime policy is this node's (its shared files): a server the panel
+// runs on another node keeps its environment and isn't restarted. Its status
+// isn't on this node, so a restart couldn't wait for its match either.
+func TestApplyRuntimePolicyOnlyOnThisNode(t *testing.T) {
+	var mu sync.Mutex
+	var touched []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/application/servers", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"data":[
+			{"attributes":{"id":1,"uuid":"s-1","identifier":"abc","name":"Echo VR 1","egg":5,"node":1,"container":{"image":"img","environment":{}}}},
+			{"attributes":{"id":2,"uuid":"s-2","identifier":"def","name":"Echo VR 2","egg":5,"node":2,"container":{"image":"img","environment":{}}}}
+		],"meta":{"pagination":{"total_pages":1}}}`))
+	})
+	mux.HandleFunc("PATCH /api/application/servers/{id}/startup", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		touched = append(touched, "env "+r.PathValue("id"))
+		mu.Unlock()
+		w.Write([]byte(`{}`))
+	})
+	mux.HandleFunc("GET /api/client/servers/{id}/resources", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"attributes":{"current_state":"running"}}`))
+	})
+	mux.HandleFunc("POST /api/client/servers/{id}/power", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		touched = append(touched, "power "+r.PathValue("id"))
+		mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	cfg := pcfg.New()
+	wings := t.TempDir()
+	cfg.Panel.URL, cfg.Panel.Kind, cfg.Panel.EggID, cfg.Panel.WingsData, cfg.Panel.NodeID = srv.URL, "pelican", 5, wings, 1
+	a := &App{Dir: t.TempDir(), Cfg: cfg, Secrets: pcfg.Secrets{pcfg.SecretAppKey: "app", pcfg.SecretClientKey: "client"}}
+	setState(t, wings, "s-1", status.StateRegistered)
+
+	if err := a.ApplyRuntimePolicy(context.Background(), true, func(string) {}); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if got := strings.Join(touched, ","); got != "env 1,power abc" {
+		t.Errorf("touched %q, want only Echo VR 1 (this node's)", got)
 	}
 }
