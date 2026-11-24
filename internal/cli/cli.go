@@ -251,18 +251,22 @@ func eggCmd(g *globals) *cobra.Command {
 
 func filesCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{Use: "files", Short: "Shared game files and runtimes on the node"}
-	var dir, runtime, mirror string
+	var dir, runtime, channel, mirror string
 	install := &cobra.Command{
 		Use: "install", Short: "Install the game and nevr-runtime into a directory (the egg's install script uses this too)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			a, aerr := g.app()
 			if dir == "" {
 				dir = pcfg.DefaultDataDir
-				if a, err := g.app(); err == nil {
+				if aerr == nil {
 					dir = a.Cfg.DataDir
 				}
 			}
+			if channel == "" && aerr == nil && a.Cfg.Runtime.Channel != "pinned" {
+				channel = a.Cfg.Runtime.Channel
+			}
 			last := ""
-			return core.InstallFiles(cmd.Context(), dir, runtime, mirror, func(step, detail string) {
+			return core.InstallFiles(cmd.Context(), dir, runtime, channel, mirror, func(step, detail string) {
 				line := "[" + step + "] " + detail
 				if strings.HasPrefix(step, "Game: Downloading") {
 					if line != last {
@@ -281,6 +285,7 @@ func filesCmd(g *globals) *cobra.Command {
 	}
 	install.Flags().StringVar(&dir, "dir", "", "target directory (default: data_dir, /srv/echovr)")
 	install.Flags().StringVar(&runtime, "runtime", "current", `nevr-runtime tag or "current"`)
+	install.Flags().StringVar(&channel, "channel", "", "nEVR channel whose release \"current\" installs (default: the config's, else stable)")
 	install.Flags().StringVar(&mirror, "mirror", "", "rsync mirror for the game files")
 	cmd.AddCommand(install)
 	return cmd

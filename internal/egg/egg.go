@@ -43,7 +43,9 @@ func Variables() []Variable {
 		{"Guilds", "Comma-separated guild IDs to host for. Empty hosts for every guild the account may host.", "NEVR_GUILDS", "", false, false, []string{"nullable", "string", "max:2000"}},
 		{"Tick rate", "Server tick rate in Hz (10-1000).", "NEVR_TICK_RATE", "120", true, false, []string{"required", "integer", "between:10,1000"}},
 		{"Empty server TTL", "Seconds an empty server waits before it returns to the lobby (0 = immediately).", "NEVR_EMPTY_TTL", "0", true, false, []string{"required", "integer", "between:0,86400"}},
-		{"nevr-runtime version", `"current" follows the node's current runtime (updated by evr-ptero); or pin a tag like v6.6.0.`, "NEVR_VERSION", "current", true, false, []string{"required", "string", "regex:/^(current)?(v[0-9]+\\.[0-9]+\\.[0-9]+[0-9A-Za-z.-]*)?$/"}},
+		{"nevr-runtime version", `"current" follows the node's current runtime (the nEVR channel's release); or pin a tag like v6.6.0 (the runtime then never updates itself).`, "NEVR_VERSION", "current", true, false, []string{"required", "string", "regex:/^(current)?(v[0-9]+\\.[0-9]+\\.[0-9]+[0-9A-Za-z.-]*)?$/"}},
+		{"nevr-runtime updater", `Who keeps nevr-runtime 6.18.0+ current: "nevr" (it updates itself to the channel's release) or "host" (evr-ptero does; the runtime's own update is off). Set by evr-ptero runtime updater.`, "EVR_RUNTIME_UPDATER", "host", true, false, []string{"required", "string", "in:nevr,host"}},
+		{"nEVR channel", `The nEVR channel the runtime follows (stable, beta, ...). Set by evr-ptero runtime channel.`, "NEVR_UPDATE_CHANNEL", "stable", true, false, []string{"required", "string", "regex:/^[a-z]+$/"}},
 		{"Publisher lock", "Game publisher lock; the EchoVRCE backend expects echovrce.", "NEVR_PUBLISHER_LOCK", "echovrce", false, false, []string{"required", "string", "max:50"}},
 		{"Game files", `"mount" uses the node's shared read-only files (/srv/echovr, set up by evr-ptero); "download" installs a private copy (about 5 GB) into this server.`, "GAME_SOURCE", "mount", false, false, []string{"required", "string", "in:mount,download"}},
 		{"Console output", `"default" hides the runtime's noisy diagnostics, "all" shows everything.`, "EVR_LOG", "default", true, true, []string{"required", "string", "in:default,all"}},
@@ -59,7 +61,7 @@ if [ "${GAME_SOURCE:-mount}" != "download" ]; then
   echo "Game files come from the node's shared mount (/opt/echovr). Nothing to install."
   exit 0
 fi
-evr-ptero files install --dir /mnt/server/echovr --runtime "${NEVR_VERSION:-current}"
+evr-ptero files install --dir /mnt/server/echovr --runtime "${NEVR_VERSION:-current}" --channel "${NEVR_UPDATE_CHANNEL:-stable}"
 `
 
 const startup = "evr-supervisor"

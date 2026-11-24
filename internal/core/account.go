@@ -197,7 +197,7 @@ func (a *App) restartAfterMatch(ctx context.Context, waiting []Server, say func(
 			s, ok := now[w.Panel.UUID]
 			switch {
 			case !ok || s.Power != "running":
-				say(w.Name() + ": stopped; it uses the new account when it starts")
+				say(w.Name() + ": stopped; it takes the change when it starts")
 			case s.Busy():
 				left = append(left, s)
 			default:
@@ -221,7 +221,7 @@ func stillInMatch(list []Server, err error) error {
 	for i, s := range list {
 		names[i] = s.Name()
 	}
-	return fmt.Errorf("%s not restarted (%w): they keep the old account until \"evr-ptero server restart\" after their match",
+	return fmt.Errorf("%s not restarted (%w): they take the change at their next start (\"evr-ptero server restart\" after their match)",
 		strings.Join(names, ", "), err)
 }
 

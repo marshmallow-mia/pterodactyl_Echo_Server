@@ -13,11 +13,37 @@ import (
 	"golang.org/x/term"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/game"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/updates"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/agent"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/core"
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/pcfg"
 )
+
+// stayOn keeps the servers on the version tag (core.App.StayOn) and gives
+// them the pinned policy.
+func stayOn(cmd *cobra.Command, g *globals, a *core.App, tag string) error {
+	if err := a.StayOn(cmd.Context(), tag); err != nil {
+		return err
+	}
+	g.say("nevr-runtime %s is now current; servers switch after their current match", tag)
+	if err := applyRuntime(cmd, g, a); err != nil {
+		return err
+	}
+	g.say("they stay on it until you pick a channel again (`evr-ptero runtime channel stable`)")
+	return nil
+}
+
+// applyRuntime shows the runtime policy and gives the servers its
+// environment (idle ones restart now, the rest after their match).
+func applyRuntime(cmd *cobra.Command, g *globals, a *core.App) error {
+	_, chs, _ := a.Channels(cmd.Context())
+	g.say("nevr-runtime: %s", a.RuntimePolicyText(chs))
+	if note := a.SelfUpdateNote(chs); note != "" {
+		g.say("note: %s", note)
+	}
+	return a.ApplyRuntimePolicy(cmd.Context(), true, func(s string) { g.say("%s", s) })
+}
 
 func runtimeCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{Use: "runtime", Short: "nevr-runtime versions in the node's shared files"}
@@ -46,17 +72,29 @@ func runtimeCmd(g *globals) *cobra.Command {
 					rows = append(rows, []string{r.Tag, state, r.Bad})
 				}
 				g.table("VERSION\tSTATE\tNOTE", rows)
+				_, chs, _ := a.Channels(cmd.Context())
+				fmt.Fprintf(w, "\nRuntime: %s; updates: %s\n", a.RuntimePolicyText(chs), a.Cfg.Updates.Runtime)
+				if note := a.SelfUpdateNote(chs); note != "" {
+					fmt.Fprintf(w, "Note: %s\n", note)
+				}
+				if len(chs) > 0 {
+					var l []string
+					for _, n := range nevr.ChannelNames(chs) {
+						l = append(l, n+" "+chs[n])
+					}
+					fmt.Fprintf(w, "nEVR's channels: %s\n", strings.Join(l, ", "))
+				}
 			})
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
-		Use: "use TAG", Short: "Switch the node's current runtime (servers pick it up after their match)", Args: cobra.ExactArgs(1),
+		Use: "use TAG", Short: "Keep the servers on a version (installed if needed; they switch after their match)", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := g.app()
 			if err != nil {
 				return err
 			}
-			return a.Store().Use(args[0])
+			return stayOn(cmd, g, a, args[0])
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
@@ -69,18 +107,78 @@ func runtimeCmd(g *globals) *cobra.Command {
 			return a.Store().Remove(args[0])
 		},
 	})
+	// applyPolicy saves a runtime policy and gives the servers its
+	// environment (idle ones restart now, the rest after their match).
+	applyPolicy := func(cmd *cobra.Command, updater, channel, pinned string) error {
+		a, err := g.app()
+		if err != nil {
+			return err
+		}
+		if err := a.SetRuntimePolicy(cmd.Context(), updater, channel, pinned); err != nil {
+			return err
+		}
+		if err := applyRuntime(cmd, g, a); err != nil {
+			return err
+		}
+		if channel != "" && channel != "pinned" {
+			g.say("`evr-ptero update apply runtime` moves the servers to the channel's release now (else the next update check does, by updates.runtime)")
+		}
+		return nil
+	}
 	cmd.AddCommand(&cobra.Command{
-		Use: "rollback", Short: "Switch back to the previous runtime",
+		Use: "channel NAME|pinned TAG", Short: "Choose the nEVR channel the runtime follows (stable, beta, ...) or pin a version",
+		Args: cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			pinned := ""
+			if args[0] == "pinned" {
+				if len(args) != 2 {
+					return errors.New("pinned needs the version: evr-ptero runtime channel pinned v6.17.0")
+				}
+				a, err := g.app()
+				if err != nil {
+					return err
+				}
+				return stayOn(cmd, g, a, args[1]) // now, as `runtime use` does
+			} else if len(args) == 2 {
+				return errors.New("only pinned takes a version")
+			}
+			return applyPolicy(cmd, "", args[0], pinned)
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use: "updater nevr|evr-ptero", Short: "Choose who keeps the runtime current: nEVR itself (6.18.0 on) or evr-ptero",
+		Args: cobra.ExactArgs(1), ValidArgs: []string{pcfg.UpdaterNevr, pcfg.UpdaterHost},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return applyPolicy(cmd, args[0], "", "")
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use: "unmark TAG", Short: "Allow a version again whose rollout failed", Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			a, err := g.app()
+			if err != nil {
+				return err
+			}
+			if err := a.Store().Unmark(args[0]); err != nil {
+				return err
+			}
+			g.say("nevr-runtime %s may be used again (`evr-ptero runtime use %s`)", args[0], args[0])
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use: "rollback", Short: "Go back to the previous runtime and stay on it",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := g.app()
 			if err != nil {
 				return err
 			}
-			tag, err := a.Store().Rollback()
-			if err == nil {
-				g.say("rolled back to %s", tag)
+			tag, err := a.StayOnPrevious(cmd.Context())
+			if err != nil {
+				return err
 			}
-			return err
+			g.say("rolled back to %s", tag)
+			return applyRuntime(cmd, g, a)
 		},
 	})
 	return cmd
@@ -411,7 +509,7 @@ the panel is backed up first and restored if the update fails).
 	apply.Flags().StringVar(&version, "version", "", "version to install (default: the newest; see update ls)")
 	apply.Flags().BoolVar(&dry, "dry-run", false, "panel and wings: print the commands instead of running them")
 	cmd.AddCommand(apply)
-	var self, game, rt, pnl, wings, window, channel string
+	var self, game, rt, pnl, wings, window, channel, rtChannel, rtUpdater string
 	var hours int
 	settings := &cobra.Command{
 		Use: "settings", Short: "Show or change how each part is updated",
@@ -435,14 +533,33 @@ the panel is backed up first and restored if the update fails).
 			if fl.Changed("check-hours") {
 				u.CheckHours = hours
 			}
-			if fl.NFlag() > 0 {
+			policy := fl.Changed("runtime-channel") || fl.Changed("runtime-updater")
+			if policy {
+				pinned := ""
+				if ch, tag, ok := strings.Cut(rtChannel, ":"); ok && ch == "pinned" {
+					rtChannel, pinned = ch, tag
+				}
+				if err := a.SetRuntimePolicy(cmd.Context(), rtUpdater, rtChannel, pinned); err != nil {
+					return err
+				}
+				if pinned != "" { // installed and switched now, as `runtime use` does
+					if err := a.StayOn(cmd.Context(), pinned); err != nil {
+						return err
+					}
+				}
+			} else if fl.NFlag() > 0 {
 				if err := a.Save(); err != nil {
 					return err
 				}
 			}
+			if policy {
+				if err := a.ApplyRuntimePolicy(cmd.Context(), true, func(s string) { g.say("%s", s) }); err != nil {
+					return err
+				}
+			}
 			return g.print(u, func(w io.Writer) {
-				fmt.Fprintf(w, "self:          %s\ngame:          %s\nruntime:       %s\npanel:         %s\nwings:         %s\npanel channel: %s\nwindow:        %s\ncheck every:   %s\n",
-					u.Self, u.Game, u.Runtime, u.Panel, u.Wings, dash(u.PanelChannel), dash(u.Window), a.Cfg.Updates.Settings().Interval())
+				fmt.Fprintf(w, "self:          %s\ngame:          %s\nruntime:       %s (%s)\npanel:         %s\nwings:         %s\npanel channel: %s\nwindow:        %s\ncheck every:   %s\n",
+					u.Self, u.Game, u.Runtime, a.RuntimePolicyText(nil), u.Panel, u.Wings, dash(u.PanelChannel), dash(u.Window), a.Cfg.Updates.Settings().Interval())
 				if !agent.ServiceInstalled() {
 					fmt.Fprintln(w, "\nThe agent is not installed: nothing is checked or installed in the background (evr-ptero agent install).")
 				}
@@ -457,6 +574,8 @@ the panel is backed up first and restored if the update fails).
 		sf.StringVar(f.dst, f.name, "", f.what+": off, notify or auto")
 	}
 	sf.StringVar(&window, "window", "", `automatic installs only in this local time window, e.g. 04:00-06:00 ("" = any time)`)
+	sf.StringVar(&rtChannel, "runtime-channel", "", `nEVR channel nevr-runtime follows (stable, beta, ...) or pinned:TAG`)
+	sf.StringVar(&rtUpdater, "runtime-updater", "", `who keeps nevr-runtime current: nevr (itself, 6.18.0 on) or evr-ptero`)
 	sf.StringVar(&channel, "panel-channel", "", `panel releases to follow: stable or beta (Pterodactyl; "" = the installed one)`)
 	sf.IntVar(&hours, "check-hours", 0, "hours between checks")
 	cmd.AddCommand(settings)

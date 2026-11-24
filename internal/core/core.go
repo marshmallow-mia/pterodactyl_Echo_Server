@@ -210,8 +210,9 @@ func (a *App) installDeviceLink(s panel.Server) error {
 
 // InstallFiles puts the game and the runtime into dir (dir/game, dir/nevr).
 // The node uses it for the shared mount; the egg's install script uses it for
-// servers with GAME_SOURCE=download. runtime is a tag or "current" (newest).
-func InstallFiles(ctx context.Context, dir, runtime, mirror string, progress func(step, detail string)) error {
+// servers with GAME_SOURCE=download. runtime is a tag or "current" (the
+// release nEVR's channel names).
+func InstallFiles(ctx context.Context, dir, runtime, channel, mirror string, progress func(step, detail string)) error {
 	say := func(s, d string) {
 		if progress != nil {
 			progress(s, d)
@@ -238,7 +239,7 @@ func InstallFiles(ctx context.Context, dir, runtime, mirror string, progress fun
 			say("Runtime", "nevr-runtime "+cur+" already installed")
 			return chmodShared(dir)
 		}
-		rel, err = c.Newest(ctx, true)
+		rel, err = c.Channel(ctx, channel)
 	} else {
 		rel, err = c.Find(ctx, runtime)
 	}
@@ -286,6 +287,11 @@ type Server struct {
 	Status *status.Status
 	Power  string // from the client API: running, offline, starting, stopping ("" if unknown)
 }
+
+// Startup is the startup command to keep when a server's image or variables
+// change: its own (an admin may run e.g. "env EVR_TELEMETRY_DUMP=1
+// evr-supervisor"), or the egg's when the panel reports none.
+func Startup(s panel.Server) string { return orStr(s.Container.StartupCommand, "evr-supervisor") }
 
 // Name of the server in the panel.
 func (s Server) Name() string { return s.Panel.Name }
@@ -402,6 +408,9 @@ func (a *App) Env(set instance.Settings, gameSource string) map[string]string {
 	}
 	if set.LogAll {
 		env["EVR_LOG"] = "all"
+	}
+	for k, v := range a.Cfg.Runtime.SelfUpdateEnv() {
+		env[k] = v
 	}
 	return env
 }
@@ -678,7 +687,7 @@ func (a *App) UpdateServer(ctx context.Context, s Server, change func(*instance.
 	}
 	newEnv := a.Env(set, orStr(env["GAME_SOURCE"], a.Cfg.GameSource))
 	p := a.Panel()
-	if err := p.UpdateStartup(ctx, s.Panel, a.Cfg.Panel.EggID, orStr(s.Panel.Container.Image, a.Cfg.Image), "evr-supervisor", newEnv, true); err != nil {
+	if err := p.UpdateStartup(ctx, s.Panel, a.Cfg.Panel.EggID, orStr(s.Panel.Container.Image, a.Cfg.Image), Startup(s.Panel), newEnv, true); err != nil {
 		return err
 	}
 	if restart && a.Secrets[pcfg.SecretClientKey] != "" && s.Power == "running" {

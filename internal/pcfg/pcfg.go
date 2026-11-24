@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/instance"
+	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr/config"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/updates"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/version"
@@ -110,11 +111,39 @@ type Resources struct {
 
 // RuntimePolicy is the nevr-runtime update policy.
 type RuntimePolicy struct {
+	// Updater is UpdaterNevr (from v6.18.0 on the runtime updates itself to
+	// its channel's release; evr-ptero keeps the node's store, and so the
+	// host DLL, on that release) or UpdaterHost (evr-ptero updates it, with
+	// the canary, and turns the runtime's own update off).
+	Updater string `yaml:"updater"`
+	// Channel is one of nEVR's channels (stable, beta, ...: the release nEVR's
+	// manifest names) or "pinned" (Pinned; only with UpdaterHost). Before
+	// updater existed it was "pre" (GitHub's newest), "stable" or "pinned".
 	Channel string `yaml:"channel"`
 	Pinned  string `yaml:"pinned,omitempty"`
 	// Before updates: existed; read once and moved there.
 	AutoUpdate *bool `yaml:"auto_update,omitempty"`
 	CheckHours int   `yaml:"check_hours,omitempty"`
+}
+
+// Runtime updaters (RuntimePolicy.Updater).
+const (
+	UpdaterNevr = "nevr"
+	UpdaterHost = "evr-ptero"
+)
+
+// SelfUpdateEnv is the servers' environment for the policy: who keeps a
+// runtime current (evr-supervisor's EVR_RUNTIME_UPDATER) and the channel.
+func (r RuntimePolicy) SelfUpdateEnv() map[string]string {
+	who := nevr.UpdaterHost
+	if r.Updater == UpdaterNevr {
+		who = nevr.UpdaterNevr
+	}
+	ch := nevr.ChannelName(r.Channel)
+	if ch == "pinned" { // a pin is evr-ptero's; the channel is not used then
+		ch = nevr.DefaultChannel
+	}
+	return map[string]string{"EVR_RUNTIME_UPDATER": who, "NEVR_UPDATE_CHANNEL": ch}
 }
 
 // UpdatePolicy says how each part is updated: off, notify or auto.
@@ -143,6 +172,16 @@ func (u *UpdatePolicy) modes() map[string]*string {
 
 // migrate moves settings from older config versions and fills defaults.
 func (c *Config) migrate() {
+	// A config from before updater: evr-ptero kept updating, on nEVR's
+	// stable channel from now on (the old channels followed GitHub's
+	// releases, which no nEVR channel does). A pin stays.
+	if c.Runtime.Updater == "" {
+		c.Runtime.Updater = UpdaterHost
+		if c.Runtime.Channel != "pinned" {
+			c.Runtime.Channel = nevr.DefaultChannel
+		}
+	}
+	c.Runtime.Channel = nevr.ChannelName(c.Runtime.Channel)
 	if c.Runtime.AutoUpdate != nil {
 		if c.Updates.Runtime == "" {
 			c.Updates.Runtime = string(updates.Notify)
@@ -172,7 +211,7 @@ func New() *Config {
 	c := &Config{Version: 1, DataDir: DefaultDataDir, Image: DefaultImage, GameSource: "mount",
 		Defaults:  instance.Settings{TickRate: config.DefaultTickRate, PublisherLock: "echovrce", Runtime: "current"},
 		Resources: Resources{MemoryMB: 0, DiskMB: 2048},
-		Runtime:   RuntimePolicy{Channel: "pre"},
+		Runtime:   RuntimePolicy{Updater: UpdaterNevr, Channel: nevr.DefaultChannel},
 		Updates:   UpdatePolicy{CheckHours: 6, Self: "notify", Game: "notify", Runtime: "auto", Panel: "notify", Wings: "notify"},
 	}
 	c.Panel.Nest = DefaultNest
@@ -204,6 +243,7 @@ func Load(dir string) (*Config, error) {
 	}
 	c := New()
 	c.Updates = UpdatePolicy{}
+	c.Runtime = RuntimePolicy{} // what the file leaves out, migrate fills in
 	if err := yaml.Unmarshal(b, c); err != nil {
 		return nil, fmt.Errorf("%s: %w", p, err)
 	}
@@ -227,14 +267,19 @@ func (c *Config) Validate() error {
 	if c.GameSource != "mount" && c.GameSource != "download" {
 		errs = append(errs, fmt.Errorf("game_source must be mount or download, got %q", c.GameSource))
 	}
-	switch c.Runtime.Channel {
-	case "pre", "stable":
-	case "pinned":
+	switch u := c.Runtime.Updater; {
+	case u != UpdaterNevr && u != UpdaterHost:
+		errs = append(errs, fmt.Errorf("runtime.updater must be %s or %s, got %q", UpdaterNevr, UpdaterHost, u))
+	case c.Runtime.Channel == "pinned" && u == UpdaterNevr:
+		errs = append(errs, fmt.Errorf("runtime.channel pinned needs runtime.updater %s (nEVR would update itself away from the pin)", UpdaterHost))
+	}
+	switch ch := c.Runtime.Channel; {
+	case ch == "pinned":
 		if c.Runtime.Pinned == "" {
 			errs = append(errs, errors.New("runtime.channel is pinned but runtime.pinned is empty"))
 		}
-	default:
-		errs = append(errs, fmt.Errorf("runtime.channel must be pre, stable or pinned, got %q", c.Runtime.Channel))
+	case !nevr.ChannelOK(ch):
+		errs = append(errs, fmt.Errorf("runtime.channel must be one of nEVR's channels (stable, beta, ...) or pinned, got %q", ch))
 	}
 	for k, m := range c.Updates.modes() {
 		if _, err := updates.ParseMode(*m, updates.Notify); err != nil {

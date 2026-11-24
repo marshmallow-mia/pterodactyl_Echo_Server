@@ -127,7 +127,14 @@ func (a *Agent) checkUpdates(ctx context.Context, app *core.App, host string) {
 // Updater returns an updater for the node's shared runtime store whose
 // canary is pinned through the panel.
 func Updater(app *core.App, log func(string)) *update.Updater {
-	return &update.Updater{Store: app.Store(), Fleet: fleet{dir: app.Dir}, Log: log}
+	dir := app.Dir
+	return &update.Updater{Store: app.Store(), Fleet: fleet{dir: dir}, Log: log, Policy: func() update.Policy {
+		now, err := core.Open(dir)
+		if err != nil {
+			return update.Policy{} // unreadable: not the policy the check started with
+		}
+		return now.Policy()
+	}}
 }
 
 type fleet struct{ dir string }
@@ -152,6 +159,28 @@ func (f fleet) Statuses(ctx context.Context) ([]status.Status, error) {
 			st.State = status.StateStarting
 		}
 		out = append(out, st)
+	}
+	return out, nil
+}
+
+var _ update.Followers = fleet{}
+
+// FollowsCurrent implements update.Followers: servers whose NEVR_VERSION is
+// the node's current runtime, as opposed to pinned to one of their own (such
+// a server is never the canary: undoing the canary's pin would drop its own).
+func (f fleet) FollowsCurrent(ctx context.Context) (map[string]bool, error) {
+	app, err := core.Open(f.dir)
+	if err != nil {
+		return nil, err
+	}
+	servers, err := app.Servers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, s := range servers {
+		rt := core.SettingsFromEnv(s.Panel.Env()).Runtime
+		out[s.Name()] = rt == "" || rt == "current"
 	}
 	return out, nil
 }
