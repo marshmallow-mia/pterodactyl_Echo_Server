@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -126,4 +127,36 @@ func (a *App) ApplyRuntimePolicy(ctx context.Context, restart bool, say func(str
 		}
 	}
 	return a.restartAfterMatch(ctx, inMatch, say)
+}
+
+// StayOn keeps the servers on the version tag, as picking a version does in
+// the launcher: tag is installed into the shared files if it isn't yet and
+// made current, and the policy is pinned to it, so neither the next update
+// check nor nEVR's own update (a pin hands updating to evr-ptero) moves the
+// servers away again. Picking a channel (`runtime channel NAME`) ends it.
+// ApplyRuntimePolicy gives the servers the change.
+func (a *App) StayOn(ctx context.Context, tag string) error {
+	st := a.Store()
+	if _, err := st.Get(tag); err != nil {
+		rel, err := (&nevr.Client{}).Find(ctx, tag)
+		if err != nil {
+			return err
+		}
+		if _, err := st.Install(ctx, rel); err != nil {
+			return err
+		}
+	}
+	if err := st.Use(tag); err != nil {
+		return err
+	}
+	return a.SetRuntimePolicy(ctx, "", "pinned", tag)
+}
+
+// StayOnPrevious is a rollback that stays: StayOn the previous version.
+func (a *App) StayOnPrevious(ctx context.Context) (string, error) {
+	prev := a.Store().Previous()
+	if prev == "" {
+		return "", errors.New("no previous runtime to roll back to")
+	}
+	return prev, a.StayOn(ctx, prev)
 }

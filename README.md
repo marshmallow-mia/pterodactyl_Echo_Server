@@ -133,6 +133,7 @@ evr-ptero server api|telemetry on|off NAME   the game's session API / nevr-runti
 evr-ptero panel plugin install|remove|status   the panel's match plugin (Pelican)
 evr-ptero account code|set|test|servers  console code (default) or password sign-in; updates every server
 evr-ptero runtime ls|use TAG|rollback|remove TAG|unmark TAG
+evr-ptero runtime use TAG               keep the servers on a version (also: rollback)
 evr-ptero runtime channel stable|beta|...|pinned TAG   the nEVR channel the runtime follows
 evr-ptero runtime updater nevr|evr-ptero              who keeps the runtime current
 evr-ptero update [check|ls|apply|settings]   evr-ptero itself, game files, nevr-runtime, panel, Wings
@@ -217,6 +218,11 @@ manifest (`stable` unless picked; `beta`, ...). `evr-ptero runtime updater` deci
 settings reach the servers as the egg variables `EVR_RUNTIME_UPDATER` and `NEVR_UPDATE_CHANNEL` (admin-only); a change
 restarts idle servers and the others once their match ends. Nodes from before followed GitHub's newest release
 (`pre`), which no nEVR channel does; they move to `stable`.
+
+Picking a version works as in the launcher's "nEVR version": `evr-ptero runtime use v6.16.5`, Enter on the runtime
+screen or its version list (`c` → one version) installs it into the shared files if needed, makes it current and keeps
+the servers on it (`runtime channel pinned v6.16.5`, evr-ptero updating), older or newer, until you pick a channel
+again. A rollback stays on the version it goes back to as well.
 
 ## Alerts and metrics
 

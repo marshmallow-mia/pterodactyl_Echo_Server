@@ -20,6 +20,31 @@ import (
 	"github.com/marshmallow-mia/pterodactyl_Echo_Server/internal/pcfg"
 )
 
+// stayOn keeps the servers on the version tag (core.App.StayOn) and gives
+// them the pinned policy.
+func stayOn(cmd *cobra.Command, g *globals, a *core.App, tag string) error {
+	if err := a.StayOn(cmd.Context(), tag); err != nil {
+		return err
+	}
+	g.say("nevr-runtime %s is now current; servers switch after their current match", tag)
+	if err := applyRuntime(cmd, g, a); err != nil {
+		return err
+	}
+	g.say("they stay on it until you pick a channel again (`evr-ptero runtime channel stable`)")
+	return nil
+}
+
+// applyRuntime shows the runtime policy and gives the servers its
+// environment (idle ones restart now, the rest after their match).
+func applyRuntime(cmd *cobra.Command, g *globals, a *core.App) error {
+	_, chs, _ := a.Channels(cmd.Context())
+	g.say("nevr-runtime: %s", a.RuntimePolicyText(chs))
+	if note := a.SelfUpdateNote(chs); note != "" {
+		g.say("note: %s", note)
+	}
+	return a.ApplyRuntimePolicy(cmd.Context(), true, func(s string) { g.say("%s", s) })
+}
+
 func runtimeCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{Use: "runtime", Short: "nevr-runtime versions in the node's shared files"}
 	cmd.AddCommand(&cobra.Command{
@@ -63,13 +88,13 @@ func runtimeCmd(g *globals) *cobra.Command {
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
-		Use: "use TAG", Short: "Switch the node's current runtime (servers pick it up after their match)", Args: cobra.ExactArgs(1),
+		Use: "use TAG", Short: "Keep the servers on a version (installed if needed; they switch after their match)", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := g.app()
 			if err != nil {
 				return err
 			}
-			return a.Store().Use(args[0])
+			return stayOn(cmd, g, a, args[0])
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
@@ -92,15 +117,10 @@ func runtimeCmd(g *globals) *cobra.Command {
 		if err := a.SetRuntimePolicy(cmd.Context(), updater, channel, pinned); err != nil {
 			return err
 		}
-		_, chs, _ := a.Channels(cmd.Context())
-		g.say("nevr-runtime: %s", a.RuntimePolicyText(chs))
-		if note := a.SelfUpdateNote(chs); note != "" {
-			g.say("note: %s", note)
-		}
-		if err := a.ApplyRuntimePolicy(cmd.Context(), true, func(s string) { g.say("%s", s) }); err != nil {
+		if err := applyRuntime(cmd, g, a); err != nil {
 			return err
 		}
-		if channel != "" {
+		if channel != "" && channel != "pinned" {
 			g.say("`evr-ptero update apply runtime` moves the servers to the channel's release now (else the next update check does, by updates.runtime)")
 		}
 		return nil
@@ -114,7 +134,11 @@ func runtimeCmd(g *globals) *cobra.Command {
 				if len(args) != 2 {
 					return errors.New("pinned needs the version: evr-ptero runtime channel pinned v6.17.0")
 				}
-				pinned = args[1]
+				a, err := g.app()
+				if err != nil {
+					return err
+				}
+				return stayOn(cmd, g, a, args[1]) // now, as `runtime use` does
 			} else if len(args) == 2 {
 				return errors.New("only pinned takes a version")
 			}
@@ -143,17 +167,18 @@ func runtimeCmd(g *globals) *cobra.Command {
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
-		Use: "rollback", Short: "Switch back to the previous runtime",
+		Use: "rollback", Short: "Go back to the previous runtime and stay on it",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := g.app()
 			if err != nil {
 				return err
 			}
-			tag, err := a.Store().Rollback()
-			if err == nil {
-				g.say("rolled back to %s", tag)
+			tag, err := a.StayOnPrevious(cmd.Context())
+			if err != nil {
+				return err
 			}
-			return err
+			g.say("rolled back to %s", tag)
+			return applyRuntime(cmd, g, a)
 		},
 	})
 	return cmd

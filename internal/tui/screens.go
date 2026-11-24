@@ -36,6 +36,7 @@ func (e linkFailed) Unwrap() error { return e.error }
 type (
 	runtimesMsg struct {
 		list     []nevr.Installed
+		releases []nevr.Release // GitHub's, for the version picker; nil offline
 		err      error
 		channels []string          // nEVR's channels, stable first
 		versions map[string]string // channel → version
@@ -356,7 +357,8 @@ func (m *Model) loadRuntimes() tea.Cmd {
 		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
 		names, versions, _ := app.Channels(cctx)
-		return runtimesMsg{list: list, err: err, channels: names, versions: versions}
+		rels, _ := (&nevr.Client{}).List(cctx)
+		return runtimesMsg{list: list, releases: rels, err: err, channels: names, versions: versions}
 	}
 }
 
@@ -407,22 +409,16 @@ func (m *Model) updateRuntime(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		tag := sel.Tag
-		m.ask("Make "+tag+" the node's runtime? Servers switch at their next match boundary.", func() tea.Cmd {
-			if err := app.Store().Use(tag); err != nil {
-				m.flash, m.flashBad = err.Error(), true
-			} else {
-				m.flash, m.flashBad = tag+" is now current", false
-			}
-			return m.loadRuntimes()
+		m.ask("Keep the servers on "+tag+"? They switch at their next match boundary and stay on it until you pick a channel again.", func() tea.Cmd {
+			return m.stayOn(tag, false)
 		})
 	case "b":
-		tag, err := app.Store().Rollback()
-		if err != nil {
-			m.flash, m.flashBad = err.Error(), true
-		} else {
-			m.flash, m.flashBad = "rolled back to "+tag, false
+		prev := app.Store().Previous()
+		if prev == "" {
+			m.flash, m.flashBad = "no previous runtime to roll back to", true
+			return m, nil
 		}
-		return m, m.loadRuntimes()
+		return m, m.stayOn(prev, true)
 	case "x":
 		if sel == nil {
 			return m, nil
@@ -492,7 +488,19 @@ func (m *Model) channelForm() tea.Cmd {
 	if channel != "pinned" && !slices.Contains(names, channel) {
 		chOpts = append(chOpts, huh.NewOption(channel, channel))
 	}
-	chOpts = append(chOpts, huh.NewOption("pinned: stay on one version (evr-ptero updates)", "pinned"))
+	chOpts = append(chOpts, huh.NewOption("one version: stay on it (evr-ptero updates)", "pinned"))
+	current := app.Store().Current()
+	if pinned == "" {
+		pinned = current
+	}
+	var verOpts []huh.Option[string]
+	tags := nevr.Pickable(m.releases, m.runtimes)
+	if pinned != "" && !slices.Contains(tags, pinned) {
+		tags = append([]string{pinned}, tags...)
+	}
+	for _, t := range tags {
+		verOpts = append(verOpts, huh.NewOption(nevr.PickLabel(t, m.chVersions, current), t))
+	}
 	f := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().Title("Who updates nevr-runtime?").Options(
@@ -503,7 +511,7 @@ func (m *Model) channelForm() tea.Cmd {
 			huh.NewConfirm().Title("Update automatically?").Description("Needs the background service (More → Discord alerts and the background service).").Value(&auto),
 		).Title("Runtime updates"),
 		huh.NewGroup(
-			huh.NewInput().Title("Pinned version").Description("e.g. v6.17.0").Value(&pinned).Validate(required("the version")),
+			huh.NewSelect[string]().Title("Version").Description("The servers stay on it until you pick a channel again.").Options(verOpts...).Value(&pinned),
 		).WithHideFunc(func() bool { return channel != "pinned" }),
 	)
 	return m.ShowForm(f, func() tea.Cmd {
@@ -517,10 +525,21 @@ func (m *Model) channelForm() tea.Cmd {
 		versions := m.chVersions
 		return m.Run("Saving the runtime settings", func(ctx context.Context, say func(string)) error {
 			if channel == "pinned" && updater == pcfg.UpdaterNevr {
-				say("pinned: evr-ptero updates (nEVR would update itself away from the pin)")
+				say("one version: evr-ptero updates (nEVR would update itself away from it)")
 				updater = pcfg.UpdaterHost
 			}
-			if err := app.SetRuntimePolicy(ctx, updater, channel, pinned); err != nil {
+			var err error
+			if channel == "pinned" {
+				if _, gerr := app.Store().Get(pinned); gerr != nil {
+					say("downloading and verifying " + pinned)
+				}
+				// switched now, as the launcher's picker does; the pin hands
+				// updating to evr-ptero
+				err = app.StayOn(ctx, pinned)
+			} else {
+				err = app.SetRuntimePolicy(ctx, updater, channel, "")
+			}
+			if err != nil {
 				return err
 			}
 			say("nevr-runtime: " + app.RuntimePolicyText(versions))
@@ -530,6 +549,28 @@ func (m *Model) channelForm() tea.Cmd {
 			return app.ApplyRuntimePolicy(ctx, true, say)
 		}, func() tea.Cmd { m.screen = scrRuntime; return m.loadRuntimes() })
 	})
+}
+
+// stayOn keeps the servers on tag (core.App.StayOn): installs it into the
+// shared files if needed, makes it current, pins the policy to it and gives
+// the servers that policy.
+func (m *Model) stayOn(tag string, rollback bool) tea.Cmd {
+	app := m.App
+	title := "Staying on nevr-runtime " + tag
+	if rollback {
+		title = "Rolling back to nevr-runtime " + tag
+	}
+	return m.Run(title, func(ctx context.Context, say func(string)) error {
+		if _, err := app.Store().Get(tag); err != nil {
+			say("downloading and verifying " + tag)
+		}
+		if err := app.StayOn(ctx, tag); err != nil {
+			return err
+		}
+		say("now current: servers switch to it at their next match boundary")
+		say("they stay on it until you pick a channel again (c)")
+		return app.ApplyRuntimePolicy(ctx, true, say)
+	}, func() tea.Cmd { m.screen = scrRuntime; return m.loadRuntimes() })
 }
 
 func (m *Model) renderRuntime() string {
@@ -554,7 +595,7 @@ func (m *Model) renderRuntime() string {
 	}
 	return m.header() + "  " + ui.Bold.Render("nevr-runtime") + "\n\n" + body + "\n\n" + ui.Subtle.Render(m.wrap(policy, 0)) + "\n" +
 		ui.Subtle.Render("Servers pick up a new current version at their next match boundary, so no match is cut short.") + "\n" +
-		m.footer(ui.K("enter", "use"), ui.K("b", "rollback"), ui.K("x", "delete"), ui.K("m", "allow a failed one again"), ui.K("u", "check for updates"), ui.K("c", "update settings"), ui.K("esc", "back"))
+		m.footer(ui.K("enter", "stay on this version"), ui.K("b", "roll back and stay"), ui.K("x", "delete"), ui.K("m", "allow a failed one again"), ui.K("u", "check for updates"), ui.K("c", "update settings"), ui.K("esc", "back"))
 }
 
 // Alerts and the background service.
