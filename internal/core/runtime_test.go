@@ -123,3 +123,64 @@ func TestApplyRuntimePolicyOnlyOnThisNode(t *testing.T) {
 		t.Errorf("touched %q, want only Echo VR 1 (this node's)", got)
 	}
 }
+
+// After a version is picked, an idle server still on another version is
+// restarted now (it picks up current only when its game starts); one in a
+// match and one pinned to its own version are left alone.
+func TestApplyRuntimePolicyRestartsIdleOnOtherVersion(t *testing.T) {
+	var mu sync.Mutex
+	var power []string
+	env := `"EVR_RUNTIME_UPDATER":"host","NEVR_UPDATE_CHANNEL":"stable"`
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/application/servers", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"data":[
+			{"attributes":{"id":1,"uuid":"s-1","identifier":"abc","name":"Echo VR 1","egg":5,"container":{"image":"img","environment":{` + env + `}}}},
+			{"attributes":{"id":2,"uuid":"s-2","identifier":"def","name":"Echo VR 2","egg":5,"container":{"image":"img","environment":{` + env + `}}}},
+			{"attributes":{"id":3,"uuid":"s-3","identifier":"ghi","name":"Echo VR 3","egg":5,"container":{"image":"img","environment":{` + env + `,"NEVR_VERSION":"v6.17.0"}}}},
+			{"attributes":{"id":4,"uuid":"s-4","identifier":"jkl","name":"Echo VR 4","egg":5,"container":{"image":"img","environment":{` + env + `}}}}
+		],"meta":{"pagination":{"total_pages":1}}}`))
+	})
+	mux.HandleFunc("GET /api/client/servers/{id}/resources", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"attributes":{"current_state":"running"}}`))
+	})
+	mux.HandleFunc("POST /api/client/servers/{id}/power", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		power = append(power, r.PathValue("id"))
+		mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	cfg := pcfg.New()
+	wings := t.TempDir()
+	cfg.DataDir = t.TempDir()
+	cfg.Panel.URL, cfg.Panel.Kind, cfg.Panel.EggID, cfg.Panel.WingsData = srv.URL, "pelican", 5, wings
+	cfg.Runtime.Updater, cfg.Runtime.Channel, cfg.Runtime.Pinned = pcfg.UpdaterHost, "pinned", "v6.16.5"
+	a := &App{Dir: t.TempDir(), Cfg: cfg, Secrets: pcfg.Secrets{pcfg.SecretAppKey: "app", pcfg.SecretClientKey: "client"}}
+	installed(t, a, nevr.Installed{Tag: "v6.16.5"})
+	if err := a.Store().Use("v6.16.5"); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.Cfg.Runtime.SelfUpdateEnv(); got["EVR_RUNTIME_UPDATER"] != "host" || got["NEVR_UPDATE_CHANNEL"] != "stable" {
+		t.Fatalf("test env out of date: %v", got)
+	}
+	write := func(uuid string, st status.State, v string) {
+		os.MkdirAll(filepath.Join(wings, uuid), 0o755)
+		if err := status.Write(filepath.Join(wings, uuid, status.FileName), status.Status{State: st, RuntimeVersion: v}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("s-1", status.StateRegistered, "6.17.0") // idle, other version: restarted
+	write("s-2", status.StateInSession, "6.17.0")  // in a match: switches when it ends
+	write("s-3", status.StateRegistered, "6.17.0") // pinned to its own version
+	write("s-4", status.StateRegistered, "6.16.5") // already on it
+
+	if err := a.ApplyRuntimePolicy(context.Background(), true, func(string) {}); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if got := strings.Join(power, ","); got != "abc" {
+		t.Errorf("restarted %q, want only Echo VR 1", got)
+	}
+}

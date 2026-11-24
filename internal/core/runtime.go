@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/instance"
 	"github.com/marshmallow-mia/Echo-VR-Server-on-Docker/v2/pkg/nevr"
@@ -91,6 +92,26 @@ func (a *App) otherNode(s Server) bool {
 	return a.Cfg.Panel.NodeID != 0 && s.Panel.Node != 0 && s.Panel.Node != a.Cfg.Panel.NodeID
 }
 
+// idleOnOtherVersion reports whether s, a running server of this node that
+// follows current, is idle on another version than current while evr-ptero
+// updates: a server picks up current at each start of its game, which is
+// otherwise only after its next match, so a version picked takes effect now.
+// With nEVR updating, a server may rightly run a newer one it put in place.
+func (a *App) idleOnOtherVersion(s Server) bool {
+	cur := a.Store().Current()
+	if a.Cfg.Runtime.Updater != pcfg.UpdaterHost || cur == "" || s.Power != "running" || a.Secrets[pcfg.SecretClientKey] == "" {
+		return false
+	}
+	if rt := SettingsFromEnv(s.Panel.Env()).Runtime; rt != "" && rt != "current" {
+		return false // pinned to its own version
+	}
+	st := s.Status
+	if st == nil || st.Stale(time.Now(), 15*time.Second) || !st.State.Idle() || st.RuntimeVersion == "" {
+		return false // unknown, or in a match: it switches when the match ends
+	}
+	return !nevr.SameRelease(st.RuntimeVersion, cur)
+}
+
 // ApplyRuntimePolicy gives every Echo VR server of this node whose
 // environment differs from the runtime policy's (who updates, the channel).
 // The panel hands a server its environment when it starts, so with restart an
@@ -114,6 +135,12 @@ func (a *App) ApplyRuntimePolicy(ctx context.Context, restart bool, say func(str
 			same = same && env[k] == v
 		}
 		if same {
+			if restart && a.idleOnOtherVersion(s) {
+				if err := a.Panel().Power(ctx, s.Panel.Identifier, "restart"); err != nil {
+					return fmt.Errorf("%s: %w", s.Name(), err)
+				}
+				say(fmt.Sprintf("%s: idle on %s, restarting on %s", s.Name(), s.Status.RuntimeVersion, a.Store().Current()))
+			}
 			continue
 		}
 		if err := a.UpdateServer(ctx, s, func(*instance.Settings) {}, false); err != nil {
